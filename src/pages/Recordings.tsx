@@ -1,4 +1,5 @@
 import { useState } from "react";
+import VideoPlayer from "../components/VideoPlayer";
 
 type Recording = {
   id: string;
@@ -25,7 +26,7 @@ export default function Recordings() {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
-  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [playingSrc, setPlayingSrc] = useState<string | null>(null);
 
   const filtered = recordings
     .filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
@@ -119,7 +120,9 @@ export default function Recordings() {
 
             {/* Play */}
             <button
-              onClick={() => setPlayingId(playingId === rec.id ? null : rec.id)}
+              onClick={() => {
+                setPlayingSrc(rec.path);
+              }}
               className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
@@ -201,6 +204,14 @@ export default function Recordings() {
           </svg>
           <p className="text-sm">No recordings found</p>
         </div>
+      )}
+
+      {/* Video Player */}
+      {playingSrc && (
+        <VideoPlayer
+          src={playingSrc}
+          onClose={() => setPlayingSrc(null)}
+        />
       )}
     </div>
   );
