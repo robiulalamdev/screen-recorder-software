@@ -1,24 +1,37 @@
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
+fn get_screen_info(app: &tauri::AppHandle) -> Result<((f64, f64), (f64, f64)), String> {
+    let main_window = app.get_webview_window("main").ok_or("Main window not found")?;
+    let monitor = main_window.primary_monitor().map_err(|e| e.to_string())?.ok_or("No monitor found")?;
+    let size = monitor.size();
+    let position = monitor.position();
+    Ok((
+        (size.width as f64, size.height as f64),
+        (position.x as f64, position.y as f64),
+    ))
+}
+
 #[tauri::command]
 fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Create a fullscreen overlay window for area selection
-    // Using dark background since transparent isn't available on WebviewWindowBuilder
+    let ((w, h), (x, y)) = get_screen_info(&app)?;
+
     let overlay = WebviewWindowBuilder::new(
         &app,
         "overlay",
         WebviewUrl::App("index.html".into()),
     )
     .title("Screen Recorder - Selection")
+    .inner_size(w, h)
+    .position(x, y)
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .resizable(false)
-    .fullscreen(true)
     .build()
     .map_err(|e| e.to_string())?;
 
     overlay.set_ignore_cursor_events(false).ok();
+    overlay.set_focus().ok();
 
     Ok(())
 }
@@ -33,18 +46,24 @@ fn close_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
+    let ((screen_w, screen_h), (_x, _y)) = get_screen_info(&app)?;
+    let toolbar_width = 650.0;
+    let toolbar_height = 56.0;
+    let x = (screen_w - toolbar_width) / 2.0;
+    let y = screen_h - toolbar_height - 80.0;
+
     let _toolbar = WebviewWindowBuilder::new(
         &app,
         "toolbar",
         WebviewUrl::App("index.html".into()),
     )
     .title("Screen Recorder - Toolbar")
-    .inner_size(650.0, 56.0)
+    .inner_size(toolbar_width, toolbar_height)
+    .position(x, y)
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .resizable(false)
-    .position(635.0, 512.0)
     .build()
     .map_err(|e| e.to_string())?;
 
