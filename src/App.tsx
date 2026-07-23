@@ -9,15 +9,22 @@ import SelectionOverlay from "./components/SelectionOverlay";
 import Countdown from "./components/Countdown";
 import FloatingToolbar from "./components/FloatingToolbar";
 import RecordingSuccess from "./components/RecordingSuccess";
+import CanvasDrawing from "./components/CanvasDrawing";
+import CameraOverlay from "./components/CameraOverlay";
 
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused" | "saved";
+type CameraShape = "circle" | "rounded" | "square";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [settingsTab, setSettingsTab] = useState("general");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [drawColor, setDrawColor] = useState("#ef4444");
+  const [brushSize, setBrushSize] = useState(4);
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
 
   const handleNavigate = (page: Page, tab?: string) => {
     setCurrentPage(page);
@@ -41,11 +48,31 @@ function App() {
   }, []);
 
   const handleStopRecording = useCallback(() => {
+    setCameraVisible(false);
+    setActiveTool(null);
     setRecordingState("saved");
   }, []);
 
   const handleDismissSaved = useCallback(() => {
     setRecordingState("idle");
+  }, []);
+
+  const handleToolSelect = useCallback((tool: string | null) => {
+    if (tool === null) {
+      // Clear drawings
+      const canvas = document.querySelector("canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      setActiveTool(null);
+    } else {
+      setActiveTool(tool);
+    }
+  }, []);
+
+  const handleCameraToggle = useCallback(() => {
+    setCameraVisible((prev) => !prev);
   }, []);
 
   const renderPage = () => {
@@ -65,6 +92,8 @@ function App() {
     }
   };
 
+  const isRecording = recordingState === "recording" || recordingState === "paused";
+
   return (
     <div className="min-h-screen bg-[#0d0d14] text-white flex">
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
@@ -83,14 +112,41 @@ function App() {
         <Countdown onComplete={handleCountdownComplete} />
       )}
 
+      {/* Canvas Drawing Layer */}
+      {isRecording && activeTool && (
+        <CanvasDrawing
+          tool={activeTool as "pen" | "highlighter" | "arrow" | "rectangle" | "circle" | "text"}
+          color={drawColor}
+          brushSize={brushSize}
+          onUndo={() => {}}
+          onRedo={() => {}}
+          canUndo={false}
+          canRedo={false}
+        />
+      )}
+
+      {/* Camera Overlay */}
+      <CameraOverlay
+        visible={isRecording && cameraVisible}
+        shape={cameraShape}
+        onShapeChange={setCameraShape}
+        onToggle={handleCameraToggle}
+      />
+
       {/* Floating Toolbar */}
-      {(recordingState === "recording" || recordingState === "paused") && (
+      {isRecording && (
         <FloatingToolbar
           isPaused={recordingState === "paused"}
           onTogglePause={handleTogglePause}
           onStop={handleStopRecording}
-          onToolSelect={setActiveTool}
+          onToolSelect={handleToolSelect}
           activeTool={activeTool}
+          cameraVisible={cameraVisible}
+          onCameraToggle={handleCameraToggle}
+          drawColor={drawColor}
+          onColorChange={setDrawColor}
+          brushSize={brushSize}
+          onBrushSizeChange={setBrushSize}
         />
       )}
 

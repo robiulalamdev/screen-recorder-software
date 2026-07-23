@@ -5,8 +5,14 @@ interface FloatingToolbarProps {
   onTogglePause: () => void;
   onStop: () => void;
   onScreenshot?: () => void;
-  onToolSelect?: (tool: string) => void;
+  onToolSelect?: (tool: string | null) => void;
   activeTool?: string | null;
+  cameraVisible?: boolean;
+  onCameraToggle?: () => void;
+  drawColor?: string;
+  onColorChange?: (color: string) => void;
+  brushSize?: number;
+  onBrushSizeChange?: (size: number) => void;
 }
 
 export default function FloatingToolbar({
@@ -16,6 +22,12 @@ export default function FloatingToolbar({
   onScreenshot,
   onToolSelect,
   activeTool,
+  cameraVisible,
+  onCameraToggle,
+  drawColor = "#ef4444",
+  onColorChange,
+  brushSize = 4,
+  onBrushSizeChange,
 }: FloatingToolbarProps) {
   const [elapsed, setElapsed] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -90,20 +102,35 @@ export default function FloatingToolbar({
           </div>
           {/* Color picker */}
           <div className="flex items-center gap-2 mb-2">
-            {["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#ffffff"].map((color) => (
+            {["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#ffffff"].map((c) => (
               <button
-                key={color}
-                className="w-5 h-5 rounded-full border border-zinc-600 hover:scale-110 transition-transform"
-                style={{ backgroundColor: color }}
+                key={c}
+                onClick={() => onColorChange?.(c)}
+                className={`w-5 h-5 rounded-full border hover:scale-110 transition-transform ${drawColor === c ? "border-white scale-110" : "border-zinc-600"}`}
+                style={{ backgroundColor: c }}
               />
             ))}
           </div>
           {/* Brush size */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-zinc-500">Size</span>
-            <input type="range" min="1" max="20" defaultValue="4" className="flex-1 accent-purple-500 h-1" />
-            <span className="text-[10px] text-zinc-400">4px</span>
+            <input
+              type="range"
+              min="1"
+              max="20"
+              value={brushSize}
+              onChange={(e) => onBrushSizeChange?.(Number(e.target.value))}
+              className="flex-1 accent-purple-500 h-1"
+            />
+            <span className="text-[10px] text-zinc-400">{brushSize}px</span>
           </div>
+          {/* Clear button */}
+          <button
+            onClick={() => onToolSelect?.(null)}
+            className="w-full mt-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-400 hover:text-white transition-colors"
+          >
+            Clear Drawings
+          </button>
         </div>
       )}
 
@@ -201,7 +228,12 @@ export default function FloatingToolbar({
         </button>
 
         {/* Camera */}
-        <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+        <button
+          onClick={onCameraToggle}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+            cameraVisible ? "text-purple-400 bg-purple-500/15" : "text-zinc-400 hover:text-white hover:bg-white/5"
+          }`}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
             <circle cx="12" cy="13" r="3" />
