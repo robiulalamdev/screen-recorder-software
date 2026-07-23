@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Recordings from "./pages/Recordings";
@@ -16,7 +18,64 @@ type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused" | "saved";
 type CameraShape = "circle" | "rounded" | "square";
 
-function App() {
+// Overlay Window - renders selection overlay fullscreen
+function OverlayWindow() {
+  const handleCapture = useCallback(async (_mode: string) => {
+    try {
+      await invoke("close_overlay_window");
+      await invoke("restore_main_window");
+      await new Promise((r) => setTimeout(r, 200));
+      await invoke("create_toolbar_window");
+    } catch (err) {
+      console.error("Failed:", err);
+    }
+  }, []);
+
+  const handleCancel = useCallback(async () => {
+    try {
+      await invoke("close_overlay_window");
+      await invoke("restore_main_window");
+    } catch {}
+  }, []);
+
+  return <SelectionOverlay onCapture={handleCapture} onCancel={handleCancel} />;
+}
+
+// Toolbar Window - renders floating toolbar in separate window
+function ToolbarWindow() {
+  const [isPaused, setIsPaused] = useState(false);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [drawColor, setDrawColor] = useState("#ef4444");
+  const [brushSize, setBrushSize] = useState(4);
+  const [cameraVisible, setCameraVisible] = useState(false);
+
+  const handleStop = useCallback(async () => {
+    try {
+      await invoke("close_toolbar_window");
+    } catch {}
+  }, []);
+
+  return (
+    <div className="bg-transparent">
+      <FloatingToolbar
+        isPaused={isPaused}
+        onTogglePause={() => setIsPaused(!isPaused)}
+        onStop={handleStop}
+        onToolSelect={setActiveTool}
+        activeTool={activeTool}
+        cameraVisible={cameraVisible}
+        onCameraToggle={() => setCameraVisible(!cameraVisible)}
+        drawColor={drawColor}
+        onColorChange={setDrawColor}
+        brushSize={brushSize}
+        onBrushSizeChange={setBrushSize}
+      />
+    </div>
+  );
+}
+
+// Main Window - renders the full application
+function MainWindow() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [settingsTab, setSettingsTab] = useState("general");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -31,11 +90,27 @@ function App() {
     if (tab) setSettingsTab(tab);
   };
 
-  const handleStartRecording = useCallback(() => {
-    setRecordingState("selecting");
+  const handleStartRecording = useCallback(async () => {
+    try {
+      await invoke("minimize_main_window");
+      await new Promise((r) => setTimeout(r, 300));
+      await invoke("create_overlay_window");
+      setRecordingState("selecting");
+    } catch (err) {
+      console.error("Failed:", err);
+      setRecordingState("selecting");
+    }
   }, []);
 
-  const handleCapture = useCallback((_mode: string) => {
+  const handleCapture = useCallback(async () => {
+    try {
+      await invoke("close_overlay_window");
+      await invoke("restore_main_window");
+      await new Promise((r) => setTimeout(r, 200));
+      await invoke("create_toolbar_window");
+    } catch (err) {
+      console.error("Failed:", err);
+    }
     setRecordingState("countdown");
   }, []);
 
@@ -47,7 +122,10 @@ function App() {
     setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
   }, []);
 
-  const handleStopRecording = useCallback(() => {
+  const handleStopRecording = useCallback(async () => {
+    try {
+      await invoke("close_toolbar_window");
+    } catch {}
     setCameraVisible(false);
     setActiveTool(null);
     setRecordingState("saved");
@@ -59,7 +137,6 @@ function App() {
 
   const handleToolSelect = useCallback((tool: string | null) => {
     if (tool === null) {
-      // Clear drawings
       const canvas = document.querySelector("canvas");
       if (canvas) {
         const ctx = canvas.getContext("2d");
@@ -99,11 +176,17 @@ function App() {
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
-      {/* Selection Overlay */}
+      {/* Selection Overlay - fallback in main window */}
       {recordingState === "selecting" && (
         <SelectionOverlay
           onCapture={handleCapture}
-          onCancel={() => setRecordingState("idle")}
+          onCancel={async () => {
+            try {
+              await invoke("close_overlay_window");
+              await invoke("restore_main_window");
+            } catch {}
+            setRecordingState("idle");
+          }}
         />
       )}
 
@@ -133,7 +216,7 @@ function App() {
         onToggle={handleCameraToggle}
       />
 
-      {/* Floating Toolbar */}
+      {/* Floating Toolbar - fallback in main window */}
       {isRecording && (
         <FloatingToolbar
           isPaused={recordingState === "paused"}
@@ -167,6 +250,26 @@ function App() {
       )}
     </div>
   );
+}
+
+// Window Router - detect which window we're in
+function App() {
+  const [windowLabel, setWindowLabel] = useState<string>("main");
+
+  useEffect(() => {
+    const currentWindow = getCurrentWindow();
+    setWindowLabel(currentWindow.label);
+  }, []);
+
+  // Render based on window label
+  switch (windowLabel) {
+    case "overlay":
+      return <OverlayWindow />;
+    case "toolbar":
+      return <ToolbarWindow />;
+    default:
+      return <MainWindow />;
+  }
 }
 
 export default App;
