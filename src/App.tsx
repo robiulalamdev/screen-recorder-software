@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { emit, listen } from "@tauri-apps/api/event";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Recordings from "./pages/Recordings";
@@ -20,12 +21,12 @@ type CameraShape = "circle" | "rounded" | "square";
 
 // Overlay Window - renders selection overlay fullscreen
 function OverlayWindow() {
-  const handleCapture = useCallback(async (_mode: string) => {
+  const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
     try {
+      // Emit event to main window with capture info
+      await emit("recording-capture", { mode, bounds });
+      // Close overlay window
       await invoke("close_overlay_window");
-      await invoke("restore_main_window");
-      await new Promise((r) => setTimeout(r, 200));
-      await invoke("create_toolbar_window");
     } catch (err) {
       console.error("Failed:", err);
     }
@@ -33,8 +34,8 @@ function OverlayWindow() {
 
   const handleCancel = useCallback(async () => {
     try {
+      await emit("recording-cancel");
       await invoke("close_overlay_window");
-      await invoke("restore_main_window");
     } catch {}
   }, []);
 
@@ -51,15 +52,21 @@ function ToolbarWindow() {
 
   const handleStop = useCallback(async () => {
     try {
+      await emit("recording-stop");
       await invoke("close_toolbar_window");
     } catch {}
+  }, []);
+
+  const handleTogglePause = useCallback(async () => {
+    setIsPaused((p) => !p);
+    await emit("recording-toggle-pause");
   }, []);
 
   return (
     <div className="bg-transparent">
       <FloatingToolbar
         isPaused={isPaused}
-        onTogglePause={() => setIsPaused(!isPaused)}
+        onTogglePause={handleTogglePause}
         onStop={handleStop}
         onToolSelect={setActiveTool}
         activeTool={activeTool}
@@ -85,6 +92,45 @@ function MainWindow() {
   const [cameraVisible, setCameraVisible] = useState(false);
   const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
 
+  // Listen for events from overlay/toolbar windows
+  useEffect(() => {
+    const unlisten = listen("recording-capture", async () => {
+      // Overlay closed after capture - restore main window and start countdown
+      try {
+        await invoke("restore_main_window");
+        await new Promise((r) => setTimeout(r, 200));
+        await invoke("create_toolbar_window");
+      } catch (err) {
+        console.error("Failed:", err);
+      }
+      setRecordingState("countdown");
+    });
+
+    const unlistenCancel = listen("recording-cancel", async () => {
+      try {
+        await invoke("restore_main_window");
+      } catch {}
+      setRecordingState("idle");
+    });
+
+    const unlistenStop = listen("recording-stop", () => {
+      setCameraVisible(false);
+      setActiveTool(null);
+      setRecordingState("saved");
+    });
+
+    const unlistenPause = listen("recording-toggle-pause", () => {
+      setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+      unlistenCancel.then((fn) => fn());
+      unlistenStop.then((fn) => fn());
+      unlistenPause.then((fn) => fn());
+    };
+  }, []);
+
   const handleNavigate = (page: Page, tab?: string) => {
     setCurrentPage(page);
     if (tab) setSettingsTab(tab);
@@ -102,24 +148,8 @@ function MainWindow() {
     }
   }, []);
 
-  const handleCapture = useCallback(async () => {
-    try {
-      await invoke("close_overlay_window");
-      await invoke("restore_main_window");
-      await new Promise((r) => setTimeout(r, 200));
-      await invoke("create_toolbar_window");
-    } catch (err) {
-      console.error("Failed:", err);
-    }
-    setRecordingState("countdown");
-  }, []);
-
   const handleCountdownComplete = useCallback(() => {
     setRecordingState("recording");
-  }, []);
-
-  const handleTogglePause = useCallback(() => {
-    setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
   }, []);
 
   const handleStopRecording = useCallback(async () => {
@@ -176,19 +206,7 @@ function MainWindow() {
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
-      {/* Selection Overlay - fallback in main window */}
-      {recordingState === "selecting" && (
-        <SelectionOverlay
-          onCapture={handleCapture}
-          onCancel={async () => {
-            try {
-              await invoke("close_overlay_window");
-              await invoke("restore_main_window");
-            } catch {}
-            setRecordingState("idle");
-          }}
-        />
-      )}
+      {/* Selection overlay is handled by separate overlay window */}
 
       {/* Countdown */}
       {recordingState === "countdown" && (
@@ -216,11 +234,11 @@ function MainWindow() {
         onToggle={handleCameraToggle}
       />
 
-      {/* Floating Toolbar - fallback in main window */}
+      {/* Floating Toolbar - fallback in main window for non-Tauri environments */}
       {isRecording && (
         <FloatingToolbar
           isPaused={recordingState === "paused"}
-          onTogglePause={handleTogglePause}
+          onTogglePause={() => setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"))}
           onStop={handleStopRecording}
           onToolSelect={handleToolSelect}
           activeTool={activeTool}
