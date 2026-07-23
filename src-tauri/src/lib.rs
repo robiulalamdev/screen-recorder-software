@@ -2,7 +2,8 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Create a fullscreen transparent overlay window for area selection
+    // Create a fullscreen overlay window for area selection
+    // Using dark background since transparent isn't available on WebviewWindowBuilder
     let overlay = WebviewWindowBuilder::new(
         &app,
         "overlay",
@@ -10,7 +11,6 @@ fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     )
     .title("Screen Recorder - Selection")
     .decorations(false)
-    .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
     .resizable(false)
@@ -18,7 +18,6 @@ fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     .build()
     .map_err(|e| e.to_string())?;
 
-    // Set the window to be transparent and click-through for the dark areas
     overlay.set_ignore_cursor_events(false).ok();
 
     Ok(())
@@ -42,7 +41,6 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     .title("Screen Recorder - Toolbar")
     .inner_size(650.0, 56.0)
     .decorations(false)
-    .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
     .resizable(false)
