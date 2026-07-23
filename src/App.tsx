@@ -1,50 +1,44 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import Sidebar from "./components/Sidebar";
+import Dashboard from "./pages/Dashboard";
+import Recordings from "./pages/Recordings";
+import Settings from "./pages/Settings";
+import ShortcutsPage from "./pages/ShortcutsPage";
+import About from "./pages/About";
+
+type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [currentPage, setCurrentPage] = useState<Page>("dashboard");
+  const [settingsTab, setSettingsTab] = useState("general");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const handleNavigate = (page: Page, tab?: string) => {
+    setCurrentPage(page);
+    if (tab) setSettingsTab(tab);
+  };
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case "dashboard":
+        return <Dashboard onNavigate={handleNavigate} />;
+      case "recordings":
+        return <Recordings />;
+      case "settings":
+        return <Settings activeTab={settingsTab} />;
+      case "shortcuts":
+        return <ShortcutsPage />;
+      case "about":
+        return <About />;
+      default:
+        return <Dashboard onNavigate={handleNavigate} />;
+    }
+  };
 
   return (
-    <main className="container">
-      <h1 className="text-red-600">Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="min-h-screen bg-[#0d0d14] text-white flex">
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+      <main className="flex-1 overflow-y-auto">{renderPage()}</main>
+    </div>
   );
 }
 
