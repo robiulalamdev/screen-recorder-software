@@ -20,6 +20,9 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Don't start selection if clicking on toolbar or menu
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-toolbar]') || target.closest('[data-menu]')) return;
     if (showCaptureMenu) { setShowCaptureMenu(false); return; }
     setIsDragging(true);
     setHasSelection(false);
@@ -68,7 +71,7 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   return (
     <div
       className="fixed inset-0 z-[9999]"
-      style={{ cursor: "crosshair", background: "rgba(0, 0, 0, 0.4)" }}
+      style={{ cursor: "crosshair", background: "rgba(0, 0, 0, 0.5)", WebkitAppRegion: "no-drag" } as React.CSSProperties}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -124,8 +127,10 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
 
       {/* Bottom toolbar - matches design */}
       <div
+        data-toolbar="true"
         className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[10000] pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2a2a3e] rounded-2xl px-3 py-2 shadow-2xl flex items-center gap-1">
           {/* ESC Cancel */}

@@ -33,6 +33,13 @@ fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     .build()
     .map_err(|e| e.to_string())?;
 
+    // Make window transparent using window_vibrancy
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+        apply_vibrancy(&overlay, NSVisualEffectMaterial::HudWindow, None, None).ok();
+    }
+
     overlay.set_ignore_cursor_events(false).ok();
     overlay.set_focus().ok();
 
@@ -53,9 +60,9 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     let toolbar_width = 650.0;
     let toolbar_height = 56.0;
     let x = (screen_w - toolbar_width) / 2.0;
-    let y = screen_h - toolbar_height - 80.0;
+    let y = screen_h - toolbar_height - 100.0; // Above the dock
 
-    let _toolbar = WebviewWindowBuilder::new(
+    let toolbar = WebviewWindowBuilder::new(
         &app,
         "toolbar",
         WebviewUrl::App("index.html".into()),
@@ -69,6 +76,13 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     .resizable(false)
     .build()
     .map_err(|e| e.to_string())?;
+
+    // Make toolbar transparent
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+        apply_vibrancy(&toolbar, NSVisualEffectMaterial::HudWindow, None, None).ok();
+    }
 
     Ok(())
 }
@@ -136,7 +150,6 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Prevent close, minimize to tray instead
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.minimize();
