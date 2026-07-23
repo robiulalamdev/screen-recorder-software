@@ -3,10 +3,9 @@ import { useState, useCallback, useEffect } from "react";
 interface SelectionOverlayProps {
   onCapture: (mode: "fullscreen" | "window" | "area", bounds?: { x: number; y: number; w: number; h: number }) => void;
   onCancel: () => void;
-  screenshot?: string | null;
 }
 
-export default function SelectionOverlay({ onCapture, onCancel, screenshot }: SelectionOverlayProps) {
+export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [start, setStart] = useState({ x: 0, y: 0 });
   const [end, setEnd] = useState({ x: 0, y: 0 });
@@ -72,24 +71,11 @@ export default function SelectionOverlay({ onCapture, onCancel, screenshot }: Se
   return (
     <div
       className="fixed inset-0 z-[9999]"
-      style={{
-        cursor: "crosshair",
-        backgroundImage: screenshot ? `url(${screenshot})` : undefined,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundColor: screenshot ? "transparent" : "rgba(0, 0, 0, 0.7)",
-      } as React.CSSProperties}
+      style={{ cursor: "crosshair", background: "rgba(0, 0, 0, 0.6)" }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {/* Dark overlay on top of screenshot */}
-      {screenshot && (
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: "rgba(0, 0, 0, 0.4)" }}
-        />
-      )}
       {/* Selection rectangle with dashed border */}
       {rect.w > 0 && rect.h > 0 && (
         <>
@@ -102,7 +88,7 @@ export default function SelectionOverlay({ onCapture, onCancel, screenshot }: Se
               width: rect.w,
               height: rect.h,
               background: "transparent",
-              boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.4)",
+              boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.6)",
             }}
           />
           {/* Dashed blue border */}

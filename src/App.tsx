@@ -19,42 +19,6 @@ type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused" | "saved";
 type CameraShape = "circle" | "rounded" | "square";
 
-// Overlay Window - renders selection overlay fullscreen with screenshot background
-function OverlayWindow() {
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Capture screenshot when overlay opens
-    const captureScreenshot = async () => {
-      try {
-        const data = await invoke<string>("capture_screenshot");
-        setScreenshot(data);
-      } catch (err) {
-        console.error("Failed to capture screenshot:", err);
-      }
-    };
-    captureScreenshot();
-  }, []);
-
-  const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
-    try {
-      await emit("recording-capture", { mode, bounds });
-      await invoke("close_overlay_window");
-    } catch (err) {
-      console.error("Failed:", err);
-    }
-  }, []);
-
-  const handleCancel = useCallback(async () => {
-    try {
-      await emit("recording-cancel");
-      await invoke("close_overlay_window");
-    } catch {}
-  }, []);
-
-  return <SelectionOverlay onCapture={handleCapture} onCancel={handleCancel} screenshot={screenshot} />;
-}
-
 // Toolbar Window - renders floating toolbar in separate window
 function ToolbarWindow() {
   const [isPaused, setIsPaused] = useState(false);
@@ -105,27 +69,8 @@ function MainWindow() {
   const [cameraVisible, setCameraVisible] = useState(false);
   const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
 
-  // Listen for events from overlay/toolbar windows
+  // Listen for events from toolbar window
   useEffect(() => {
-    const unlisten = listen("recording-capture", async () => {
-      // Overlay closed after capture - restore main window and start countdown
-      try {
-        await invoke("restore_main_window");
-        await new Promise((r) => setTimeout(r, 200));
-        await invoke("create_toolbar_window");
-      } catch (err) {
-        console.error("Failed:", err);
-      }
-      setRecordingState("countdown");
-    });
-
-    const unlistenCancel = listen("recording-cancel", async () => {
-      try {
-        await invoke("restore_main_window");
-      } catch {}
-      setRecordingState("idle");
-    });
-
     const unlistenStop = listen("recording-stop", () => {
       setCameraVisible(false);
       setActiveTool(null);
@@ -137,8 +82,6 @@ function MainWindow() {
     });
 
     return () => {
-      unlisten.then((fn) => fn());
-      unlistenCancel.then((fn) => fn());
       unlistenStop.then((fn) => fn());
       unlistenPause.then((fn) => fn());
     };
@@ -150,15 +93,26 @@ function MainWindow() {
   };
 
   const handleStartRecording = useCallback(async () => {
+    // Make main window fullscreen for selection
+    const win = getCurrentWindow();
+    await win.setFullscreen(true);
+    await new Promise((r) => setTimeout(r, 200));
+    setRecordingState("selecting");
+  }, []);
+
+  const handleCapture = useCallback(async (_mode: string, _bounds?: { x: number; y: number; w: number; h: number }) => {
+    // Exit fullscreen
+    const win = getCurrentWindow();
+    await win.setFullscreen(false);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Create toolbar window
     try {
-      await invoke("minimize_main_window");
-      await new Promise((r) => setTimeout(r, 300));
-      await invoke("create_overlay_window");
-      setRecordingState("selecting");
+      await invoke("create_toolbar_window");
     } catch (err) {
       console.error("Failed:", err);
-      setRecordingState("selecting");
     }
+    setRecordingState("countdown");
   }, []);
 
   const handleCountdownComplete = useCallback(() => {
@@ -219,7 +173,17 @@ function MainWindow() {
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
-      {/* Selection overlay is handled by separate overlay window */}
+      {/* Selection Overlay - renders fullscreen in main window */}
+      {recordingState === "selecting" && (
+        <SelectionOverlay
+          onCapture={handleCapture}
+          onCancel={async () => {
+            const win = getCurrentWindow();
+            await win.setFullscreen(false);
+            setRecordingState("idle");
+          }}
+        />
+      )}
 
       {/* Countdown */}
       {recordingState === "countdown" && (
@@ -292,10 +256,7 @@ function App() {
     setWindowLabel(currentWindow.label);
   }, []);
 
-  // Render based on window label
   switch (windowLabel) {
-    case "overlay":
-      return <OverlayWindow />;
     case "toolbar":
       return <ToolbarWindow />;
     default:
