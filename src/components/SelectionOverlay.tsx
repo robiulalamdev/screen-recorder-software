@@ -9,7 +9,8 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   const [isDragging, setIsDragging] = useState(false);
   const [start, setStart] = useState({ x: 0, y: 0 });
   const [end, setEnd] = useState({ x: 0, y: 0 });
-  const [phase, setPhase] = useState<"options" | "selecting">("options");
+  const [showCaptureMenu, setShowCaptureMenu] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
 
   const rect = {
     x: Math.min(start.x, end.x),
@@ -19,11 +20,12 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (phase !== "selecting") return;
+    if (showCaptureMenu) { setShowCaptureMenu(false); return; }
     setIsDragging(true);
+    setHasSelection(false);
     setStart({ x: e.clientX, y: e.clientY });
     setEnd({ x: e.clientX, y: e.clientY });
-  }, [phase]);
+  }, [showCaptureMenu]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging) return;
@@ -34,9 +36,26 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
     if (!isDragging) return;
     setIsDragging(false);
     if (rect.w > 50 && rect.h > 50) {
+      setHasSelection(true);
+    }
+  }, [isDragging, rect]);
+
+  const handleStartRecording = useCallback(() => {
+    if (hasSelection) {
       onCapture("area", { x: rect.x, y: rect.y, w: rect.w, h: rect.h });
     }
-  }, [isDragging, rect, onCapture]);
+  }, [hasSelection, rect, onCapture]);
+
+  const handleModeSelect = useCallback((mode: "fullscreen" | "window" | "area") => {
+    setShowCaptureMenu(false);
+    if (mode === "area") {
+      setHasSelection(false);
+      setStart({ x: 0, y: 0 });
+      setEnd({ x: 0, y: 0 });
+    } else {
+      onCapture(mode);
+    }
+  }, [onCapture]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,24 +68,15 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   return (
     <div
       className="fixed inset-0 z-[9999]"
-      style={{
-        cursor: phase === "options" ? "default" : "crosshair",
-        background: "#000000",
-      }}
+      style={{ cursor: "crosshair", background: "rgba(0, 0, 0, 0.4)" }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {/* Dark overlay layer */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: "rgba(0, 0, 0, 0.7)" }}
-      />
-
-      {/* Selection rectangle - only when selecting */}
-      {phase === "selecting" && rect.w > 0 && rect.h > 0 && (
+      {/* Selection rectangle with dashed border */}
+      {rect.w > 0 && rect.h > 0 && (
         <>
-          {/* Clear area (no dark overlay) */}
+          {/* Clear area */}
           <div
             className="absolute pointer-events-none"
             style={{
@@ -75,18 +85,24 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
               width: rect.w,
               height: rect.h,
               background: "transparent",
-              boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.7)",
+              boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.4)",
             }}
           />
-          {/* Blue border */}
+          {/* Dashed blue border */}
           <div
-            className="absolute border-2 border-blue-500 pointer-events-none"
-            style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+            className="absolute pointer-events-none"
+            style={{
+              left: rect.x,
+              top: rect.y,
+              width: rect.w,
+              height: rect.h,
+              border: "2px dashed #3b82f6",
+            }}
           />
           {/* Dimension label */}
           <div
-            className="absolute px-2 py-1 bg-zinc-900 border border-zinc-600 rounded text-xs text-white font-mono pointer-events-none"
-            style={{ left: rect.x + rect.w / 2 - 32, top: rect.y - 32 }}
+            className="absolute px-2.5 py-1 bg-zinc-900/90 border border-zinc-600 rounded text-xs text-white font-mono pointer-events-none"
+            style={{ left: rect.x + rect.w / 2 - 36, top: rect.y - 32 }}
           >
             {Math.round(rect.w)} x {Math.round(rect.h)}
           </div>
@@ -99,73 +115,187 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
           ].map((pos, i) => (
             <div
               key={i}
-              className="absolute w-2.5 h-2.5 bg-blue-500 rounded-sm pointer-events-none"
+              className="absolute w-2.5 h-2.5 bg-blue-500 rounded-full pointer-events-none"
               style={{ left: pos.x, top: pos.y }}
             />
           ))}
         </>
       )}
 
-      {/* Capture options popup - centered */}
-      {phase === "options" && (
-        <div className="absolute inset-0 flex items-center justify-center z-[10000]">
-          <div className="bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-2 shadow-2xl">
-            <button
-              onClick={() => {
-                setPhase("selecting");
-                onCapture("fullscreen");
-              }}
-              className="flex items-center gap-3 w-full px-5 py-3.5 rounded-lg hover:bg-white/5 text-left transition-colors"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-400">
-                <rect x="2" y="3" width="20" height="14" rx="2" />
-                <path d="M8 21h8" /><path d="M12 17v4" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-white">Full Screen</p>
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                setPhase("selecting");
-                onCapture("window");
-              }}
-              className="flex items-center gap-3 w-full px-5 py-3.5 rounded-lg hover:bg-white/5 text-left transition-colors"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-400">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18" /><path d="M9 21V9" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-white">Window</p>
-              </div>
-            </button>
-            <button
-              onClick={() => setPhase("selecting")}
-              className="flex items-center gap-3 w-full px-5 py-3.5 rounded-lg bg-purple-500/15 text-left transition-colors"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-400">
-                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-purple-400">Custom Area</p>
-              </div>
-            </button>
-          </div>
-          <p className="absolute bottom-12 text-xs text-zinc-400">ESC to cancel</p>
-        </div>
-      )}
+      {/* Bottom toolbar - matches design */}
+      <div
+        className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[10000] pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2a2a3e] rounded-2xl px-3 py-2 shadow-2xl flex items-center gap-1">
+          {/* ESC Cancel */}
+          <button
+            onClick={onCancel}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <span className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-[10px] font-mono">ESC</span>
+            Cancel
+          </button>
 
-      {/* ESC hint when selecting */}
-      {phase === "selecting" && !isDragging && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-[10000]">
-          <span className="px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-zinc-300">ESC</span>
-          <span className="text-xs text-zinc-400">Cancel</span>
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Capture mode selector (three dots) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCaptureMenu(!showCaptureMenu)}
+              className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+              </svg>
+            </button>
+
+            {/* Capture options dropdown */}
+            {showCaptureMenu && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-1.5 shadow-2xl min-w-[160px]">
+                <button
+                  onClick={() => handleModeSelect("fullscreen")}
+                  className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-white/5 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <path d="M8 21h8" /><path d="M12 17v4" />
+                  </svg>
+                  Full Screen
+                </button>
+                <button
+                  onClick={() => handleModeSelect("window")}
+                  className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-white/5 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18" /><path d="M9 21V9" />
+                  </svg>
+                  Window
+                </button>
+                <button
+                  onClick={() => handleModeSelect("area")}
+                  className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm bg-purple-500/15 text-purple-400 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                    <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                    <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                  </svg>
+                  Custom Area
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Record button */}
+          {hasSelection && (
+            <button
+              onClick={handleStartRecording}
+              className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"
+            >
+              <div className="w-3.5 h-3.5 rounded-full bg-white" />
+            </button>
+          )}
+
+          {/* Pause (disabled until recording) */}
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-600 cursor-not-allowed" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+            </svg>
+          </button>
+
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Timer */}
+          <span className="text-sm font-mono text-zinc-500 min-w-[48px]">00:00:00</span>
+
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Mic */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 6a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V9a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </button>
+
+          {/* Volume */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+
+          {/* Camera */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+          </button>
+
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Drawing tools */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+            </svg>
+          </button>
+
+          {/* Highlighter */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m9 11-6 6v3h9l3-3" />
+              <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+            </svg>
+          </button>
+
+          {/* Arrow */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+
+          {/* Text */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" />
+            </svg>
+          </button>
+
+          {/* Rectangle */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+            </svg>
+          </button>
+
+          <div className="w-px h-6 bg-zinc-700 mx-1" />
+
+          {/* Settings */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+
+          {/* Minimize */}
+          <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+              <path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+            </svg>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

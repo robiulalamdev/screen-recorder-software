@@ -1,28 +1,9 @@
 import { useState } from "react";
 import VideoPlayer from "../components/VideoPlayer";
-
-type Recording = {
-  id: string;
-  name: string;
-  duration: string;
-  resolution: string;
-  fps: string;
-  size: string;
-  date: string;
-  path: string;
-};
-
-const initialRecordings: Recording[] = [
-  { id: "1", name: "Project Demo.mp4", duration: "00:12:45", resolution: "1920x1080", fps: "60 FPS", size: "23.8 MB", date: "Today, 10:30 AM", path: "~/Downloads/ScreenRecorder/2026/July/Project_Demo.mp4" },
-  { id: "2", name: "UI Design Review.mp4", duration: "00:08:19", resolution: "1920x1080", fps: "60 FPS", size: "15.6 MB", date: "Today, 09:15 AM", path: "~/Downloads/ScreenRecorder/2026/July/UI_Design_Review.mp4" },
-  { id: "3", name: "Bug Fix Walkthrough.mp4", duration: "00:17:32", resolution: "2560x1440", fps: "60 FPS", size: "35.7 MB", date: "Yesterday, 04:20 PM", path: "~/Downloads/ScreenRecorder/2026/July/Bug_Fix_Walkthrough.mp4" },
-  { id: "4", name: "Feature Explanation.mp4", duration: "00:06:51", resolution: "1920x1080", fps: "30 FPS", size: "11.3 MB", date: "Yesterday, 11:10 AM", path: "~/Downloads/ScreenRecorder/2026/July/Feature_Explanation.mp4" },
-  { id: "5", name: "API Integration Guide.mp4", duration: "00:22:10", resolution: "1920x1080", fps: "30 FPS", size: "42.5 MB", date: "22 Jul, 03:45 PM", path: "~/Downloads/ScreenRecorder/2026/July/API_Integration_Guide.mp4" },
-  { id: "6", name: "Code Review Session.mp4", duration: "00:15:03", resolution: "2560x1440", fps: "60 FPS", size: "38.2 MB", date: "21 Jul, 02:15 PM", path: "~/Downloads/ScreenRecorder/2026/July/Code_Review_Session.mp4" },
-];
+import { useRecordings } from "../stores/recordingsStore";
 
 export default function Recordings() {
-  const [recordings, setRecordings] = useState(initialRecordings);
+  const { recordings, deleteRecording, renameRecording } = useRecordings();
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
@@ -33,7 +14,7 @@ export default function Recordings() {
     .sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "size") return parseFloat(b.size) - parseFloat(a.size);
-      return 0; // date default
+      return b.createdAt - a.createdAt; // date default (newest first)
     });
 
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
@@ -41,20 +22,18 @@ export default function Recordings() {
     setContextMenu({ id, x: e.clientX, y: e.clientY });
   };
 
-  const handleAction = (action: string, rec: Recording) => {
+  const handleAction = (action: string, rec: { id: string; name: string; path: string }) => {
     setContextMenu(null);
     switch (action) {
       case "delete":
-        setRecordings((prev) => prev.filter((r) => r.id !== rec.id));
+        deleteRecording(rec.id);
         break;
       case "copyPath":
         navigator.clipboard?.writeText(rec.path);
         break;
       case "rename": {
         const newName = prompt("Rename recording:", rec.name);
-        if (newName) {
-          setRecordings((prev) => prev.map((r) => r.id === rec.id ? { ...r, name: newName } : r));
-        }
+        if (newName) renameRecording(rec.id, newName);
         break;
       }
     }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSettings } from "../stores/settingsStore";
 
 interface SettingsProps {
   activeTab: string;
@@ -30,20 +31,16 @@ function TabIcon({ icon }: { icon: string }) {
   }
 }
 
-function Toggle({ enabled }: { enabled: boolean }) {
+function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className={`w-10 h-5.5 rounded-full p-0.5 transition-colors ${enabled ? "bg-purple-500" : "bg-zinc-700"}`}>
+    <button onClick={() => onChange(!enabled)} className={`w-10 h-5.5 rounded-full p-0.5 transition-colors ${enabled ? "bg-purple-500" : "bg-zinc-700"}`}>
       <div className={`w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0"}`} />
-    </div>
+    </button>
   );
 }
 
 function GeneralSettings() {
-  const [autoFolders, setAutoFolders] = useState(true);
-  const [autoOpen, setAutoOpen] = useState(false);
-  const [minTray, setMinTray] = useState(true);
-  const [launchStartup, setLaunchStartup] = useState(false);
-  const [theme, setTheme] = useState("dark");
+  const { settings, updateSettings } = useSettings();
 
   return (
     <div className="space-y-6">
@@ -51,9 +48,15 @@ function GeneralSettings() {
         <h3 className="text-sm font-medium mb-3">Save Location</h3>
         <div className="flex items-center gap-2">
           <div className="flex-1 px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-400 truncate">
-            C:\Users\Robiul Alam\Downloads\ScreenRecorder
+            {settings.saveLocation}
           </div>
-          <button className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors">Change</button>
+          <button
+            onClick={() => {
+              const loc = prompt("Enter save location:", settings.saveLocation);
+              if (loc) updateSettings({ saveLocation: loc });
+            }}
+            className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors"
+          >Change</button>
           <button className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors">Open</button>
         </div>
       </div>
@@ -61,31 +64,31 @@ function GeneralSettings() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-300">Auto create folders by Year/Month</span>
-          <button onClick={() => setAutoFolders(!autoFolders)}><Toggle enabled={autoFolders} /></button>
+          <Toggle enabled={settings.autoCreateFolders} onChange={(v) => updateSettings({ autoCreateFolders: v })} />
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-300">Auto open folder after recording</span>
-          <button onClick={() => setAutoOpen(!autoOpen)}><Toggle enabled={autoOpen} /></button>
+          <Toggle enabled={settings.autoOpenFolder} onChange={(v) => updateSettings({ autoOpenFolder: v })} />
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-300">Minimize to system tray</span>
-          <button onClick={() => setMinTray(!minTray)}><Toggle enabled={minTray} /></button>
+          <Toggle enabled={settings.minimizeToTray} onChange={(v) => updateSettings({ minimizeToTray: v })} />
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-300">Launch on startup</span>
-          <button onClick={() => setLaunchStartup(!launchStartup)}><Toggle enabled={launchStartup} /></button>
+          <Toggle enabled={settings.launchOnStartup} onChange={(v) => updateSettings({ launchOnStartup: v })} />
         </div>
       </div>
 
       <div>
         <h3 className="text-sm font-medium mb-3">Theme</h3>
         <div className="flex gap-2">
-          {["dark", "light", "system"].map((t) => (
+          {(["dark", "light", "system"] as const).map((t) => (
             <button
               key={t}
-              onClick={() => setTheme(t)}
+              onClick={() => updateSettings({ theme: t })}
               className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
-                theme === t
+                settings.theme === t
                   ? "bg-purple-500/15 border border-purple-500/30 text-purple-400"
                   : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"
               }`}
@@ -99,7 +102,11 @@ function GeneralSettings() {
 
       <div>
         <h3 className="text-sm font-medium mb-3">Language</h3>
-        <select className="w-48 px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
+        <select
+          value={settings.language}
+          onChange={(e) => updateSettings({ language: e.target.value })}
+          className="w-48 px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none"
+        >
           <option>English</option>
         </select>
       </div>
@@ -108,13 +115,16 @@ function GeneralSettings() {
 }
 
 function RecordingSettings() {
+  const { settings, updateSettings } = useSettings();
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-sm font-medium mb-3">Video Quality</h3>
         <div className="flex gap-2">
-          {["Low", "Medium", "High", "Ultra"].map((q, i) => (
-            <button key={q} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${i === 2 ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
+          {(["low", "medium", "high", "ultra"] as const).map((q) => (
+            <button key={q} onClick={() => updateSettings({ videoQuality: q })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${settings.videoQuality === q ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
               {q}
             </button>
           ))}
@@ -123,9 +133,10 @@ function RecordingSettings() {
       <div>
         <h3 className="text-sm font-medium mb-3">Frame Rate</h3>
         <div className="flex gap-2">
-          {["24 FPS", "30 FPS", "60 FPS"].map((f, i) => (
-            <button key={f} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${i === 2 ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
-              {f}
+          {([24, 30, 60] as const).map((f) => (
+            <button key={f} onClick={() => updateSettings({ frameRate: f })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${settings.frameRate === f ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
+              {f} FPS
             </button>
           ))}
         </div>
@@ -133,8 +144,9 @@ function RecordingSettings() {
       <div>
         <h3 className="text-sm font-medium mb-3">Resolution</h3>
         <div className="flex gap-2">
-          {["Original", "1080P", "1440P", "4K"].map((r, i) => (
-            <button key={r} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${i === 0 ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
+          {(["original", "1080p", "1440p", "4k"] as const).map((r) => (
+            <button key={r} onClick={() => updateSettings({ resolution: r })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium uppercase transition-colors ${settings.resolution === r ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
               {r}
             </button>
           ))}
@@ -143,8 +155,9 @@ function RecordingSettings() {
       <div>
         <h3 className="text-sm font-medium mb-3">Encoder</h3>
         <div className="flex gap-2">
-          {["H264", "H265", "AV1"].map((e, i) => (
-            <button key={e} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${i === 0 ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
+          {(["h264", "h265", "av1"] as const).map((e) => (
+            <button key={e} onClick={() => updateSettings({ encoder: e })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium uppercase transition-colors ${settings.encoder === e ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
               {e}
             </button>
           ))}
@@ -153,8 +166,9 @@ function RecordingSettings() {
       <div>
         <h3 className="text-sm font-medium mb-3">Output Format</h3>
         <div className="flex gap-2">
-          {["MP4", "WebM", "MKV"].map((f, i) => (
-            <button key={f} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${i === 0 ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
+          {(["mp4", "webm", "mkv"] as const).map((f) => (
+            <button key={f} onClick={() => updateSettings({ outputFormat: f })}
+              className={`px-4 py-2 rounded-lg text-sm font-medium uppercase transition-colors ${settings.outputFormat === f ? "bg-purple-500/15 border border-purple-500/30 text-purple-400" : "bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white"}`}>
               {f}
             </button>
           ))}
@@ -165,32 +179,75 @@ function RecordingSettings() {
 }
 
 function AudioSettings() {
+  const { settings, updateSettings } = useSettings();
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-sm font-medium mb-3">Microphone</h3>
-        <select className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
-          <option>Default</option>
-          <option>USB Microphone</option>
-          <option>Bluetooth Microphone</option>
+        <select value={settings.microphone} onChange={(e) => updateSettings({ microphone: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
+          <option>Default</option><option>USB Microphone</option><option>Bluetooth Microphone</option>
         </select>
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">System Audio</h3>
-        <select className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
-          <option>Default</option>
-          <option>Headphones</option>
-          <option>Speakers</option>
+        <select value={settings.systemAudio} onChange={(e) => updateSettings({ systemAudio: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
+          <option>Default</option><option>Headphones</option><option>Speakers</option>
         </select>
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">Microphone Volume</h3>
-        <input type="range" min="0" max="100" defaultValue="80" className="w-full accent-purple-500" />
+        <input type="range" min="0" max="100" value={settings.micVolume}
+          onChange={(e) => updateSettings({ micVolume: Number(e.target.value) })}
+          className="w-full accent-purple-500" />
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">System Audio Volume</h3>
-        <input type="range" min="0" max="100" defaultValue="70" className="w-full accent-purple-500" />
+        <input type="range" min="0" max="100" value={settings.systemVolume}
+          onChange={(e) => updateSettings({ systemVolume: Number(e.target.value) })}
+          className="w-full accent-purple-500" />
       </div>
+    </div>
+  );
+}
+
+function ShortcutsSettings() {
+  const { settings, updateShortcuts } = useSettings();
+
+  const shortcutItems = [
+    { key: "startStop" as const, label: "Start / Stop Recording" },
+    { key: "pauseResume" as const, label: "Pause / Resume" },
+    { key: "stop" as const, label: "Stop Recording" },
+    { key: "mute" as const, label: "Mute / Unmute Mic" },
+    { key: "screenshot" as const, label: "Take Screenshot" },
+    { key: "showToolbar" as const, label: "Show / Hide Toolbar" },
+  ];
+
+  return (
+    <div className="space-y-1">
+      {shortcutItems.map((item) => (
+        <div key={item.key} className="flex items-center justify-between py-3 border-b border-[#1e1e2e] last:border-0">
+          <span className="text-sm text-zinc-300">{item.label}</span>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-xs text-zinc-400 font-mono">
+              {settings.shortcuts[item.key]}
+            </span>
+            <button
+              onClick={() => {
+                const newKey = prompt(`Set shortcut for ${item.label}:`, settings.shortcuts[item.key]);
+                if (newKey) updateShortcuts({ [item.key]: newKey });
+              }}
+              className="w-7 h-7 rounded-lg bg-[#16162a] border border-[#1e1e2e] flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -203,26 +260,21 @@ export default function Settings({ activeTab }: SettingsProps) {
       case "general": return <GeneralSettings />;
       case "recording": return <RecordingSettings />;
       case "audio": return <AudioSettings />;
+      case "shortcuts": return <ShortcutsSettings />;
       default: return <GeneralSettings />;
     }
   };
 
   return (
     <div className="flex h-full">
-      {/* Settings Nav */}
       <div className="w-[180px] border-r border-[#1e1e2e] p-4 shrink-0">
         <h2 className="text-sm font-semibold mb-4">Settings</h2>
         <div className="space-y-1">
           {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setCurrentTab(tab.id)}
+            <button key={tab.id} onClick={() => setCurrentTab(tab.id)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentTab === tab.id
-                  ? "bg-purple-500/15 text-purple-400"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
-              }`}
-            >
+                currentTab === tab.id ? "bg-purple-500/15 text-purple-400" : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}>
               <span className={currentTab === tab.id ? "text-purple-400" : "text-zinc-500"}>
                 <TabIcon icon={tab.icon} />
               </span>
@@ -231,8 +283,6 @@ export default function Settings({ activeTab }: SettingsProps) {
           ))}
         </div>
       </div>
-
-      {/* Settings Content */}
       <div className="flex-1 p-6 max-w-[500px]">
         {renderContent()}
       </div>

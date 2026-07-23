@@ -1,3 +1,5 @@
+import { useRecordings } from "../stores/recordingsStore";
+
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
 interface DashboardProps {
@@ -33,45 +35,6 @@ const actionCards = [
     shortcut: "Ctrl + ,",
     icon: "settings",
     color: "from-zinc-700 to-zinc-600",
-  },
-];
-
-const mockRecordings = [
-  {
-    id: "1",
-    name: "Project Demo.mp4",
-    duration: "00:12:45",
-    resolution: "1920x1080",
-    fps: "60 FPS",
-    size: "23.8 MB",
-    date: "Today, 10:30 AM",
-  },
-  {
-    id: "2",
-    name: "UI Design Review.mp4",
-    duration: "00:08:19",
-    resolution: "1920x1080",
-    fps: "60 FPS",
-    size: "15.6 MB",
-    date: "Today, 09:15 AM",
-  },
-  {
-    id: "3",
-    name: "Bug Fix Walkthrough.mp4",
-    duration: "00:17:32",
-    resolution: "2560x1440",
-    fps: "60 FPS",
-    size: "35.7 MB",
-    date: "Yesterday, 04:20 PM",
-  },
-  {
-    id: "4",
-    name: "Feature Explanation.mp4",
-    duration: "00:06:51",
-    resolution: "1920x1080",
-    fps: "30 FPS",
-    size: "11.3 MB",
-    date: "Yesterday, 11:10 AM",
   },
 ];
 
@@ -113,6 +76,9 @@ function ActionIcon({ icon }: { icon: string }) {
 }
 
 export default function Dashboard({ onNavigate, onStartRecording }: DashboardProps) {
+  const { recordings } = useRecordings();
+  const recentRecordings = recordings.slice(0, 4);
+
   return (
     <div className="p-6 max-w-[900px]">
       {/* Header */}
@@ -171,7 +137,7 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
         </div>
 
         <div className="space-y-2">
-          {mockRecordings.map((rec) => (
+          {recentRecordings.map((rec) => (
             <div
               key={rec.id}
               className="flex items-center gap-4 p-3 rounded-xl bg-[#16162a] border border-[#1e1e2e] hover:border-zinc-600 transition-colors cursor-pointer group"
