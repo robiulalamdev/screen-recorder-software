@@ -93,11 +93,20 @@ function MainWindow() {
   };
 
   const handleStartRecording = useCallback(async () => {
-    // Make main window fullscreen for selection
-    const win = getCurrentWindow();
-    await win.setFullscreen(true);
-    await new Promise((r) => setTimeout(r, 200));
-    setRecordingState("selecting");
+    try {
+      // Make main window fullscreen for selection
+      const win = getCurrentWindow();
+      console.log("Starting recording - setting fullscreen...");
+      await win.setFullscreen(true);
+      console.log("Fullscreen set, waiting...");
+      await new Promise((r) => setTimeout(r, 300));
+      console.log("Setting state to selecting...");
+      setRecordingState("selecting");
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      // Fallback: just show overlay without fullscreen
+      setRecordingState("selecting");
+    }
   }, []);
 
   const handleCapture = useCallback(async (_mode: string, _bounds?: { x: number; y: number; w: number; h: number }) => {

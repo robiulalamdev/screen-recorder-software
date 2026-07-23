@@ -160,11 +160,15 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
         data-toolbar="true"
         className="fixed z-[10000] pointer-events-auto"
         style={{ left: toolbarPos.x, top: toolbarPos.y }}
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onMouseMove={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
       >
         <div
           className="bg-[#1a1a2e]/95 backdrop-blur-sm border border-[#2a2a3e] rounded-2xl px-3 py-2 shadow-2xl flex items-center gap-1 cursor-move"
-          onMouseDown={handleToolbarMouseDown}
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleToolbarMouseDown(e); }}
+          onMouseMove={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
         >
           {/* ESC Cancel */}
           <button
@@ -224,6 +228,7 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
 
           {/* Record button */}
           <button
+            onMouseDown={(e) => { e.stopPropagation(); }}
             onClick={(e) => { e.stopPropagation(); if (hasSelection) handleStartRecording(); }}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               hasSelection ? "bg-red-500 hover:bg-red-600" : "bg-zinc-700 cursor-not-allowed"
