@@ -2,6 +2,7 @@ type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
 interface DashboardProps {
   onNavigate: (page: Page, tab?: string) => void;
+  onStartRecording?: () => void;
 }
 
 const actionCards = [
@@ -111,7 +112,7 @@ function ActionIcon({ icon }: { icon: string }) {
   }
 }
 
-export default function Dashboard({ onNavigate }: DashboardProps) {
+export default function Dashboard({ onNavigate, onStartRecording }: DashboardProps) {
   return (
     <div className="p-6 max-w-[900px]">
       {/* Header */}
@@ -130,7 +131,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <button
             key={card.id}
             onClick={() => {
-              if (card.id === "settings") onNavigate("settings", "general");
+              if (card.id === "recording") onStartRecording?.();
+              else if (card.id === "settings") onNavigate("settings", "general");
               else onNavigate("dashboard");
             }}
             className={`flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:scale-[1.02] ${
