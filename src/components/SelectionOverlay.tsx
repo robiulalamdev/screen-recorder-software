@@ -3,9 +3,10 @@ import { useState, useCallback, useEffect } from "react";
 interface SelectionOverlayProps {
   onCapture: (mode: "fullscreen" | "window" | "area", bounds?: { x: number; y: number; w: number; h: number }) => void;
   onCancel: () => void;
+  screenshot?: string | null;
 }
 
-export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverlayProps) {
+export default function SelectionOverlay({ onCapture, onCancel, screenshot }: SelectionOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [start, setStart] = useState({ x: 0, y: 0 });
   const [end, setEnd] = useState({ x: 0, y: 0 });
@@ -71,11 +72,24 @@ export default function SelectionOverlay({ onCapture, onCancel }: SelectionOverl
   return (
     <div
       className="fixed inset-0 z-[9999]"
-      style={{ cursor: "crosshair", background: "rgba(0, 0, 0, 0.5)", WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      style={{
+        cursor: "crosshair",
+        backgroundImage: screenshot ? `url(${screenshot})` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundColor: screenshot ? "transparent" : "rgba(0, 0, 0, 0.7)",
+      } as React.CSSProperties}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
+      {/* Dark overlay on top of screenshot */}
+      {screenshot && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "rgba(0, 0, 0, 0.4)" }}
+        />
+      )}
       {/* Selection rectangle with dashed border */}
       {rect.w > 0 && rect.h > 0 && (
         <>

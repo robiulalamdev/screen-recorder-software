@@ -19,13 +19,26 @@ type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused" | "saved";
 type CameraShape = "circle" | "rounded" | "square";
 
-// Overlay Window - renders selection overlay fullscreen
+// Overlay Window - renders selection overlay fullscreen with screenshot background
 function OverlayWindow() {
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Capture screenshot when overlay opens
+    const captureScreenshot = async () => {
+      try {
+        const data = await invoke<string>("capture_screenshot");
+        setScreenshot(data);
+      } catch (err) {
+        console.error("Failed to capture screenshot:", err);
+      }
+    };
+    captureScreenshot();
+  }, []);
+
   const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
     try {
-      // Emit event to main window with capture info
       await emit("recording-capture", { mode, bounds });
-      // Close overlay window
       await invoke("close_overlay_window");
     } catch (err) {
       console.error("Failed:", err);
@@ -39,7 +52,7 @@ function OverlayWindow() {
     } catch {}
   }, []);
 
-  return <SelectionOverlay onCapture={handleCapture} onCancel={handleCancel} />;
+  return <SelectionOverlay onCapture={handleCapture} onCancel={handleCancel} screenshot={screenshot} />;
 }
 
 // Toolbar Window - renders floating toolbar in separate window

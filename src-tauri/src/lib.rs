@@ -15,6 +15,45 @@ fn get_screen_info(app: &tauri::AppHandle) -> Result<((f64, f64), (f64, f64)), S
 }
 
 #[tauri::command]
+fn capture_screenshot() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        use std::fs;
+
+        // Create temp file path
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join("screen_recorder_screenshot.png");
+
+        // Capture screenshot using screencapture command
+        let output = Command::new("screencapture")
+            .args(["-x", "-t", "png", temp_path.to_str().unwrap()])
+            .output()
+            .map_err(|e| format!("Failed to run screencapture: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("screencapture failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        // Read the file
+        let png_data = fs::read(&temp_path)
+            .map_err(|e| format!("Failed to read screenshot: {}", e))?;
+
+        // Clean up
+        let _ = fs::remove_file(&temp_path);
+
+        // Encode to base64
+        use base64::Engine;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&png_data);
+
+        return Ok(format!("data:image/png;base64,{}", encoded));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    Err("Screenshot not supported on this platform yet".into())
+}
+
+#[tauri::command]
 fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     let ((w, h), (x, y)) = get_screen_info(&app)?;
 
@@ -32,13 +71,6 @@ fn create_overlay_window(app: tauri::AppHandle) -> Result<(), String> {
     .resizable(false)
     .build()
     .map_err(|e| e.to_string())?;
-
-    // Make window transparent using window_vibrancy
-    #[cfg(target_os = "macos")]
-    {
-        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
-        apply_vibrancy(&overlay, NSVisualEffectMaterial::HudWindow, None, None).ok();
-    }
 
     overlay.set_ignore_cursor_events(false).ok();
     overlay.set_focus().ok();
@@ -60,9 +92,9 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     let toolbar_width = 650.0;
     let toolbar_height = 56.0;
     let x = (screen_w - toolbar_width) / 2.0;
-    let y = screen_h - toolbar_height - 100.0; // Above the dock
+    let y = screen_h - toolbar_height - 100.0;
 
-    let toolbar = WebviewWindowBuilder::new(
+    let _toolbar = WebviewWindowBuilder::new(
         &app,
         "toolbar",
         WebviewUrl::App("index.html".into()),
@@ -76,13 +108,6 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     .resizable(false)
     .build()
     .map_err(|e| e.to_string())?;
-
-    // Make toolbar transparent
-    #[cfg(target_os = "macos")]
-    {
-        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
-        apply_vibrancy(&toolbar, NSVisualEffectMaterial::HudWindow, None, None).ok();
-    }
 
     Ok(())
 }
@@ -117,7 +142,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Create system tray
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("Screen Recorder")
@@ -141,6 +165,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            capture_screenshot,
             create_overlay_window,
             close_overlay_window,
             create_toolbar_window,
