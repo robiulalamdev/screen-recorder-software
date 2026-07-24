@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface Recording {
   id: string;
@@ -28,6 +29,31 @@ function saveRecordings(recordings: Recording[]) {
 
 export function useRecordings() {
   const [recordings, setRecordings] = useState<Recording[]>(loadRecordings);
+
+  // Validate recordings on mount - remove files that no longer exist
+  useEffect(() => {
+    const validateFiles = async () => {
+      const stored = loadRecordings();
+      if (stored.length === 0) return;
+
+      try {
+        const paths = stored.map((r) => r.path);
+        const validPaths = await invoke<string[]>("validate_recordings", { paths });
+
+        // Filter to only recordings with valid paths
+        const validRecordings = stored.filter((r) => validPaths.includes(r.path));
+
+        // Only update if there are changes
+        if (validRecordings.length !== stored.length) {
+          setRecordings(validRecordings);
+        }
+      } catch (err) {
+        console.error("Failed to validate recordings:", err);
+      }
+    };
+
+    validateFiles();
+  }, []);
 
   useEffect(() => {
     saveRecordings(recordings);

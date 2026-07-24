@@ -46,36 +46,25 @@ static RECORDING_STATE: Mutex<RecordingState> = Mutex::new(RecordingState {
 
 #[tauri::command]
 fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    let main_window = app.get_webview_window("main").ok_or("Main window not found")?;
-    let monitor = main_window.primary_monitor().map_err(|e| e.to_string())?.ok_or("No monitor found")?;
-    let screen_size = monitor.size();
-    let toolbar_width = 650.0;
-    let toolbar_height = 56.0;
-    let x = (screen_size.width as f64 - toolbar_width) / 2.0;
-    let y = 40.0;
+    // Hide main window during recording so it's not captured
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.hide();
+    }
 
-    let _toolbar = WebviewWindowBuilder::new(
-        &app,
-        "toolbar",
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("Screen Recorder - Toolbar")
-    .inner_size(toolbar_width, toolbar_height)
-    .position(x, y)
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .build()
-    .map_err(|e| e.to_string())?;
+    // Show recording indicator via system notification
+    let _ = Command::new("osascript")
+        .args(&["-e", r#"display notification "Recording in progress. Press Ctrl+Shift+R to stop." with title "Screen Recorder""#])
+        .output();
 
     Ok(())
 }
 
 #[tauri::command]
 fn close_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(toolbar) = app.get_webview_window("toolbar") {
-        toolbar.close().map_err(|e| e.to_string())?;
+    // Show main window again after recording stops
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.set_focus();
     }
     Ok(())
 }
@@ -159,12 +148,8 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
     args.push(options.fps.unwrap_or(60).to_string());
     args.push("-i".into());
 
-    // Build capture device string
-    let capture_size = match (options.width, options.height) {
-        (Some(w), Some(h)) => format!("{}x{}", w as u32, h as u32),
-        _ => "0:0".into(), // full screen
-    };
-    args.push(format!("1:{}:none", capture_size));
+    // Build capture device string - always capture full screen first
+    args.push("1:0:none".to_string());
 
     // Add audio input if microphone enabled
     if options.microphone.as_deref() != Some("muted") {
@@ -172,6 +157,15 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
         args.push("avfoundation".into());
         args.push("-i".into());
         args.push(":0".into());
+    }
+
+    // Add crop filter for area capture
+    if options.mode == "area" {
+        if let (Some(x), Some(y), Some(w), Some(h)) = (options.x, options.y, options.width, options.height) {
+            // Crop filter: crop=width:height:x:y
+            args.push("-vf".into());
+            args.push(format!("crop={}:{}:{}:{}", w as u32, h as u32, x as u32, y as u32));
+        }
     }
 
     // Encoder settings
@@ -245,20 +239,32 @@ fn stop_recording(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    // Send SIGINT to ffmpeg to finalize the file
+    // Send SIGINT to ffmpeg to gracefully finalize the file
     if let Some(pid) = state.pid {
-        #[cfg(target_os = "macos")]
-        {
-            let _ = Command::new("kill")
-                .args(&["-2", &pid.to_string()])
-                .spawn();
+        let pid_str = pid.to_string();
+
+        // SIGINT first — ffmpeg will finalize the output file
+        let _ = Command::new("kill")
+            .args(&["-2", &pid_str])
+            .output();
+
+        // Wait up to 3 seconds for ffmpeg to exit, then force kill
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            // Check if process is still alive
+            let check = Command::new("kill")
+                .args(&["-0", &pid_str])
+                .output();
+            match check {
+                Ok(o) if !o.status.success() => break, // process exited
+                _ => {}
+            }
         }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = Command::new("kill")
-                .args(&["-2", &pid.to_string()])
-                .spawn();
-        }
+
+        // Force kill if still running
+        let _ = Command::new("kill")
+            .args(&["-9", &pid_str])
+            .output();
     }
 
     state.is_recording = false;
@@ -338,8 +344,11 @@ fn take_screenshot(save_location: Option<String>) -> Result<String, String> {
 
 #[tauri::command]
 fn open_file(path: String) -> Result<(), String> {
+    let expanded_path = path.replace("~", &dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy());
     Command::new("open")
-        .arg(&path)
+        .arg(&expanded_path)
         .spawn()
         .map_err(|e| format!("Failed to open file: {}", e))?;
     Ok(())
@@ -347,8 +356,11 @@ fn open_file(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_folder(path: String) -> Result<(), String> {
+    let expanded_path = path.replace("~", &dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy());
     Command::new("open")
-        .args(&["-R", &path])
+        .args(&["-R", &expanded_path])
         .spawn()
         .map_err(|e| format!("Failed to open folder: {}", e))?;
     Ok(())
@@ -436,8 +448,13 @@ fn ensure_save_directory(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_disk_space(path: String) -> Result<serde_json::Value, String> {
+    // Expand ~ to home directory
+    let expanded_path = path.replace("~", &dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy());
+
     let output = Command::new("df")
-        .args(&["-k", &path])
+        .args(&["-k", &expanded_path])
         .output()
         .map_err(|e| format!("Failed to get disk space: {}", e))?;
 
@@ -483,6 +500,30 @@ fn get_file_size(path: String) -> Result<u64, String> {
 }
 
 #[tauri::command]
+fn check_file_exists(path: String) -> Result<bool, String> {
+    // Expand ~ in path
+    let expanded_path = path.replace("~", &dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy());
+    Ok(PathBuf::from(&expanded_path).exists())
+}
+
+#[tauri::command]
+fn validate_recordings(paths: Vec<String>) -> Result<Vec<String>, String> {
+    let mut valid_paths = Vec::new();
+    for path in paths {
+        // Expand ~ in path
+        let expanded_path = path.replace("~", &dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .to_string_lossy());
+        if PathBuf::from(&expanded_path).exists() {
+            valid_paths.push(path);
+        }
+    }
+    Ok(valid_paths)
+}
+
+#[tauri::command]
 fn list_recordings(folder: String) -> Result<Vec<serde_json::Value>, String> {
     let entries = fs::read_dir(&folder).map_err(|e| format!("Failed to read directory: {}", e))?;
 
@@ -519,6 +560,45 @@ fn list_recordings(folder: String) -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
+async fn select_folder(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let folder = app.dialog()
+        .file()
+        .blocking_pick_folder()
+        .ok_or("No folder selected")?;
+
+    Ok(folder.to_string())
+}
+
+#[tauri::command]
+fn get_file_url(path: String) -> Result<String, String> {
+    // Expand ~ in path
+    let expanded_path = path.replace("~", &dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy());
+
+    // Return the expanded path - frontend will handle URL conversion
+    Ok(expanded_path.to_string())
+}
+
+#[tauri::command]
+fn get_home_dir() -> Result<String, String> {
+    Ok(dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy()
+        .to_string())
+}
+
+#[tauri::command]
+fn get_downloads_dir() -> Result<String, String> {
+    Ok(dirs::download_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .to_string_lossy()
+        .to_string())
+}
+
+#[tauri::command]
 fn show_notification(title: String, body: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -538,6 +618,7 @@ fn show_notification(title: String, body: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Build tray menu
             let show = MenuItemBuilder::with_id("show", "Open Screen Recorder").build(app)?;
@@ -643,7 +724,13 @@ pub fn run() {
             rename_file,
             duplicate_file,
             get_file_size,
+            check_file_exists,
+            validate_recordings,
             list_recordings,
+            select_folder,
+            get_file_url,
+            get_home_dir,
+            get_downloads_dir,
             show_notification,
         ])
         .on_window_event(|window, event| {

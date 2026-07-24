@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
 interface SidebarProps {

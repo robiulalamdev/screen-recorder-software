@@ -1,4 +1,5 @@
 import { useRecordings } from "../stores/recordingsStore";
+import { invoke } from "@tauri-apps/api/core";
 
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
@@ -165,7 +166,10 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
               </div>
 
               {/* Play */}
-              <button className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => invoke("open_file", { path: rec.path }).catch(console.error)}
+                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>

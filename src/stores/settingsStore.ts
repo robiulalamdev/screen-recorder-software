@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface AppSettings {
   // General
@@ -39,8 +40,14 @@ export interface AppSettings {
   };
 }
 
+// Get default save location from Rust backend
+let defaultSaveLocation = "~/Downloads/ScreenRecorder";
+invoke<string>("get_downloads_dir").then((dir) => {
+  defaultSaveLocation = `${dir}/ScreenRecorder`;
+}).catch(() => {});
+
 const defaultSettings: AppSettings = {
-  saveLocation: "~/Downloads/ScreenRecorder",
+  saveLocation: defaultSaveLocation,
   autoCreateFolders: true,
   autoOpenFolder: false,
   minimizeToTray: true,

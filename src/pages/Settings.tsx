@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../stores/settingsStore";
 
 interface SettingsProps {
@@ -42,6 +43,17 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
 function GeneralSettings() {
   const { settings, updateSettings } = useSettings();
 
+  const handleSelectFolder = async () => {
+    try {
+      const folder = await invoke<string>("select_folder");
+      if (folder) {
+        updateSettings({ saveLocation: folder });
+      }
+    } catch (err) {
+      console.error("Failed to select folder:", err);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -51,10 +63,7 @@ function GeneralSettings() {
             {settings.saveLocation}
           </div>
           <button
-            onClick={() => {
-              const loc = prompt("Enter save location:", settings.saveLocation);
-              if (loc) updateSettings({ saveLocation: loc });
-            }}
+            onClick={handleSelectFolder}
             className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors"
           >Change</button>
         </div>
@@ -263,29 +272,85 @@ function ShortcutsSettings() {
     { key: "showToolbar" as const, label: "Show / Hide Toolbar" },
   ];
 
+  const [listeningFor, setListeningFor] = useState<string | null>(null);
+
+  const handleEditShortcut = (key: string) => {
+    setListeningFor(key);
+  };
+
+  useEffect(() => {
+    if (!listeningFor) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore bare modifier keys
+      if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+      const parts: string[] = [];
+      if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+      if (e.shiftKey) parts.push("Shift");
+      if (e.altKey) parts.push("Alt");
+
+      const keyName = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      if (!parts.includes(keyName)) parts.push(keyName);
+
+      const shortcut = parts.join(" + ");
+      updateShortcuts({ [listeningFor]: shortcut });
+      setListeningFor(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [listeningFor, updateShortcuts]);
+
+  const handleResetDefaults = () => {
+    updateShortcuts({
+      startStop: "Ctrl + Shift + R",
+      pauseResume: "Ctrl + Shift + P",
+      stop: "Ctrl + Shift + S",
+      mute: "Ctrl + Shift + M",
+      screenshot: "Ctrl + Shift + C",
+      showToolbar: "Ctrl + Shift + T",
+    });
+  };
+
   return (
-    <div className="space-y-1">
-      {shortcutItems.map((item) => (
-        <div key={item.key} className="flex items-center justify-between py-3 border-b border-[#1e1e2e] last:border-0">
-          <span className="text-sm text-zinc-300">{item.label}</span>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-xs text-zinc-400 font-mono">
-              {settings.shortcuts[item.key]}
-            </span>
-            <button
-              onClick={() => {
-                const newKey = prompt(`Set shortcut for ${item.label}:`, settings.shortcuts[item.key]);
-                if (newKey) updateShortcuts({ [item.key]: newKey });
-              }}
-              className="w-7 h-7 rounded-lg bg-[#16162a] border border-[#1e1e2e] flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              </svg>
-            </button>
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium">Keyboard Shortcuts</h3>
+        <button
+          onClick={handleResetDefaults}
+          className="px-3 py-1.5 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-xs text-zinc-400 hover:text-white transition-colors"
+        >
+          Reset to Default
+        </button>
+      </div>
+      <div className="space-y-1">
+        {shortcutItems.map((item) => (
+          <div key={item.key} className="flex items-center justify-between py-3 border-b border-[#1e1e2e] last:border-0">
+            <span className="text-sm text-zinc-300">{item.label}</span>
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+                listeningFor === item.key
+                  ? "bg-purple-500/15 border-purple-500/30 text-purple-400 animate-pulse"
+                  : "bg-[#0d0d14] border-[#1e1e2e] text-zinc-400"
+              }`}>
+                {listeningFor === item.key ? "Press keys..." : settings.shortcuts[item.key]}
+              </span>
+              <button
+                onClick={() => handleEditShortcut(item.key)}
+                className="w-7 h-7 rounded-lg bg-[#16162a] border border-[#1e1e2e] flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -293,10 +358,9 @@ function ShortcutsSettings() {
 export default function Settings({ activeTab }: SettingsProps) {
   const [currentTab, setCurrentTab] = useState(activeTab);
 
-  // Sync with external tab changes
-  if (currentTab !== activeTab) {
+  useEffect(() => {
     setCurrentTab(activeTab);
-  }
+  }, [activeTab]);
 
   const renderContent = () => {
     switch (currentTab) {
@@ -304,6 +368,40 @@ export default function Settings({ activeTab }: SettingsProps) {
       case "recording": return <RecordingSettings />;
       case "audio": return <AudioSettings />;
       case "shortcuts": return <ShortcutsSettings />;
+      case "about": return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                <circle cx="12" cy="12" r="5" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-base font-semibold">Screen Recorder</h2>
+              <p className="text-xs text-zinc-500">Version 0.1.0</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-[#1e1e2e]">
+            <span className="text-sm text-zinc-400">Developer</span>
+            <span className="text-sm text-zinc-300">Md. Robiul Alam</span>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-[#1e1e2e]">
+            <span className="text-sm text-zinc-400">License</span>
+            <span className="text-sm text-zinc-300">MIT</span>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-[#1e1e2e]">
+            <span className="text-sm text-zinc-400">Framework</span>
+            <span className="text-sm text-zinc-300">Tauri + React</span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-zinc-400">Platform</span>
+            <span className="text-sm text-zinc-300">Cross-Platform</span>
+          </div>
+          <p className="mt-4 text-xs text-zinc-600 text-center">
+            A lightweight, offline-first desktop screen recorder.
+          </p>
+        </div>
+      );
       default: return <GeneralSettings />;
     }
   };

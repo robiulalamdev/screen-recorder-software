@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { emit, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Recordings from "./pages/Recordings";
@@ -10,9 +10,7 @@ import ShortcutsPage from "./pages/ShortcutsPage";
 import About from "./pages/About";
 import SelectionOverlay from "./components/SelectionOverlay";
 import Countdown from "./components/Countdown";
-import FloatingToolbar from "./components/FloatingToolbar";
 import RecordingSuccess from "./components/RecordingSuccess";
-import CanvasDrawing from "./components/CanvasDrawing";
 import CameraOverlay from "./components/CameraOverlay";
 import ErrorNotification from "./components/ErrorNotification";
 import { useSettings } from "./stores/settingsStore";
@@ -23,70 +21,11 @@ type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused
 type CameraShape = "circle" | "rounded" | "square";
 type ErrorType = "no-microphone" | "disk-full" | "permission-denied" | "recording-failed" | "encoder-unavailable" | "camera-not-found" | "ffmpeg-not-found";
 
-// Toolbar Window - renders floating toolbar in separate window
-function ToolbarWindow() {
-  const [isPaused, setIsPaused] = useState(false);
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [drawColor, setDrawColor] = useState("#ef4444");
-  const [brushSize, setBrushSize] = useState(4);
-  const [cameraVisible, setCameraVisible] = useState(false);
-
-  useEffect(() => {
-    const unlistenPause = listen("toolbar-toggle-pause", () => {
-      setIsPaused((p) => !p);
-    });
-    return () => {
-      unlistenPause.then((fn) => fn());
-    };
-  }, []);
-
-  const handleStop = useCallback(async () => {
-    try {
-      await invoke("stop_recording");
-      await emit("recording-stop");
-      await invoke("close_toolbar_window");
-    } catch {}
-  }, []);
-
-  const handleTogglePause = useCallback(async () => {
-    setIsPaused((p) => !p);
-    try {
-      if (isPaused) {
-        await invoke("resume_recording");
-      } else {
-        await invoke("pause_recording");
-      }
-    } catch {}
-    await emit("recording-toggle-pause");
-  }, [isPaused]);
-
-  return (
-    <div className="bg-transparent">
-      <FloatingToolbar
-        isPaused={isPaused}
-        onTogglePause={handleTogglePause}
-        onStop={handleStop}
-        onToolSelect={setActiveTool}
-        activeTool={activeTool}
-        cameraVisible={cameraVisible}
-        onCameraToggle={() => setCameraVisible(!cameraVisible)}
-        drawColor={drawColor}
-        onColorChange={setDrawColor}
-        brushSize={brushSize}
-        onBrushSizeChange={setBrushSize}
-      />
-    </div>
-  );
-}
-
 // Main Window - renders the full application
 function MainWindow() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [settingsTab, setSettingsTab] = useState("general");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [drawColor, setDrawColor] = useState("#ef4444");
-  const [brushSize, setBrushSize] = useState(4);
   const [cameraVisible, setCameraVisible] = useState(false);
   const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
   const [error, setError] = useState<{ type: ErrorType; message?: string } | null>(null);
@@ -97,6 +36,9 @@ function MainWindow() {
     filePath: string;
   } | null>(null);
   const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
+  const [actualFilePath, setActualFilePath] = useState<string | null>(null);
+  const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
 
   const { settings } = useSettings();
   const { addRecording } = useRecordings();
@@ -159,48 +101,59 @@ function MainWindow() {
         return;
       }
 
-      // Check disk space
-      const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: settings.saveLocation || "~/Downloads" });
+      // Check disk space - expand ~ in path
+      const expandedPath = settings.saveLocation.replace("~", await invoke<string>("get_home_dir"));
+      const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) {
         setError({ type: "disk-full" });
         return;
       }
 
-      // Make main window fullscreen for selection
+      // Go to selection overlay so user can choose fullscreen, window, or area
       const win = getCurrentWindow();
       await win.setFullscreen(true);
       await new Promise((r) => setTimeout(r, 300));
       setRecordingState("selecting");
     } catch (err) {
       console.error("Failed to start recording:", err);
-      setRecordingState("selecting");
+      setError({ type: "recording-failed", message: String(err) });
     }
   }, [settings.saveLocation]);
 
-  const handleCapture = useCallback(async (_mode: string, _bounds?: { x: number; y: number; w: number; h: number }) => {
+  const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
+    // Store the capture mode and bounds
+    setCaptureMode(mode as "fullscreen" | "window" | "area");
+    setCaptureBounds(bounds || null);
+
     // Exit fullscreen
     const win = getCurrentWindow();
     await win.setFullscreen(false);
     await new Promise((r) => setTimeout(r, 200));
 
-    // Create toolbar window
-    try {
-      await invoke("create_toolbar_window");
-    } catch (err) {
-      console.error("Failed:", err);
-    }
+    // Start countdown - toolbar will be created after countdown completes
     setRecordingState("countdown");
   }, []);
 
   const handleCountdownComplete = useCallback(async () => {
+    // Hide main window so it's not captured in recording
+    try {
+      await invoke("create_toolbar_window"); // This now hides main window
+    } catch (err) {
+      console.error("Failed to hide window:", err);
+    }
+
     setRecordingState("recording");
     setRecordingStartTime(Date.now());
 
     // Start actual recording via Rust backend
     try {
-      await invoke("start_recording", {
+      const filePath = await invoke<string>("start_recording", {
         options: {
-          mode: "fullscreen",
+          mode: captureMode,
+          x: captureBounds?.x,
+          y: captureBounds?.y,
+          width: captureBounds?.w,
+          height: captureBounds?.h,
           fps: settings.frameRate,
           quality: settings.videoQuality,
           encoder: settings.encoder,
@@ -212,18 +165,25 @@ function MainWindow() {
           saveLocation: settings.saveLocation,
         },
       });
+      setActualFilePath(filePath);
     } catch (err) {
       console.error("Failed to start recording:", err);
       setError({ type: "recording-failed", message: String(err) });
+      // Show main window back on error
+      await invoke("close_toolbar_window");
       setRecordingState("idle");
     }
-  }, [settings]);
+  }, [settings, captureMode, captureBounds]);
 
   const handleStopRecording = useCallback(async () => {
     try {
       await invoke("stop_recording");
+      // Show main window again
       await invoke("close_toolbar_window");
     } catch {}
+
+    // Wait a moment for ffmpeg to finish writing the file
+    await new Promise((r) => setTimeout(r, 500));
 
     const duration = Date.now() - recordingStartTime;
     const totalSeconds = Math.floor(duration / 1000);
@@ -232,9 +192,20 @@ function MainWindow() {
     const seconds = totalSeconds % 60;
     const durationStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
-    const now = new Date();
-    const fileName = `Recording_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}.${settings.outputFormat}`;
-    const filePath = `${settings.saveLocation}/${fileName}`;
+    // Use the actual file path from the backend (already expanded by Rust)
+    const filePath = actualFilePath || "";
+    const fileName = filePath.split('/').pop() || "Recording.mp4";
+
+    // Get actual file size
+    let fileSize = "N/A";
+    try {
+      const sizeBytes = await invoke<number>("get_file_size", { path: filePath });
+      if (sizeBytes > 1048576) {
+        fileSize = `${(sizeBytes / 1048576).toFixed(1)} MB`;
+      } else {
+        fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
+      }
+    } catch {}
 
     // Save to recordings store
     addRecording({
@@ -242,20 +213,19 @@ function MainWindow() {
       duration: durationStr,
       resolution: settings.resolution === "original" ? "1920x1080" : settings.resolution.toUpperCase(),
       fps: `${settings.frameRate} FPS`,
-      size: "N/A",
-      date: now.toLocaleDateString(),
+      size: fileSize,
+      date: new Date().toLocaleDateString(),
       path: filePath,
     });
 
     setSavedRecording({
       fileName,
-      fileSize: "Recording complete",
+      fileSize,
       duration: durationStr,
       filePath,
     });
 
     setCameraVisible(false);
-    setActiveTool(null);
     setRecordingState("saved");
 
     // Show notification
@@ -269,27 +239,16 @@ function MainWindow() {
     // Open folder if setting enabled
     if (settings.autoOpenFolder) {
       try {
-        await invoke("open_folder", { path: settings.saveLocation });
+        const expandedPath = await invoke<string>("get_file_url", { path: settings.saveLocation });
+        await invoke("open_folder", { path: expandedPath });
       } catch {}
     }
-  }, [recordingStartTime, settings, addRecording]);
+  }, [recordingStartTime, settings, addRecording, actualFilePath]);
 
   const handleDismissSaved = useCallback(() => {
     setRecordingState("idle");
     setSavedRecording(null);
-  }, []);
-
-  const handleToolSelect = useCallback((tool: string | null) => {
-    if (tool === null) {
-      const canvas = document.querySelector("canvas");
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      setActiveTool(null);
-    } else {
-      setActiveTool(tool);
-    }
+    setActualFilePath(null);
   }, []);
 
   const handleCameraToggle = useCallback(() => {
@@ -337,19 +296,6 @@ function MainWindow() {
         <Countdown onComplete={handleCountdownComplete} />
       )}
 
-      {/* Canvas Drawing Layer */}
-      {isRecording && activeTool && (
-        <CanvasDrawing
-          tool={activeTool as "pen" | "highlighter" | "arrow" | "rectangle" | "circle" | "text"}
-          color={drawColor}
-          brushSize={brushSize}
-          onUndo={() => {}}
-          onRedo={() => {}}
-          canUndo={false}
-          canRedo={false}
-        />
-      )}
-
       {/* Camera Overlay */}
       <CameraOverlay
         visible={isRecording && cameraVisible}
@@ -357,44 +303,6 @@ function MainWindow() {
         onShapeChange={setCameraShape}
         onToggle={handleCameraToggle}
       />
-
-      {/* Floating Toolbar - fallback in main window for non-Tauri environments */}
-      {isRecording && (
-        <FloatingToolbar
-          isPaused={recordingState === "paused"}
-          onTogglePause={async () => {
-            const newState = recordingState === "recording" ? "paused" : "recording";
-            setRecordingState(newState);
-            try {
-              if (newState === "paused") {
-                await invoke("pause_recording");
-              } else {
-                await invoke("resume_recording");
-              }
-            } catch {}
-          }}
-          onStop={handleStopRecording}
-          onToolSelect={handleToolSelect}
-          activeTool={activeTool}
-          cameraVisible={cameraVisible}
-          onCameraToggle={handleCameraToggle}
-          drawColor={drawColor}
-          onColorChange={setDrawColor}
-          brushSize={brushSize}
-          onBrushSizeChange={setBrushSize}
-          onScreenshot={async () => {
-            try {
-              const path = await invoke<string>("take_screenshot", { saveLocation: settings.saveLocation });
-              await invoke("show_notification", {
-                title: "Screenshot Saved",
-                body: path,
-              });
-            } catch (err) {
-              setError({ type: "recording-failed", message: `Screenshot failed: ${err}` });
-            }
-          }}
-        />
-      )}
 
       {/* Recording Success */}
       {recordingState === "saved" && savedRecording && (
@@ -443,21 +351,9 @@ function MainWindow() {
   );
 }
 
-// Window Router - detect which window we're in
+// App - just render main window
 function App() {
-  const [windowLabel, setWindowLabel] = useState<string>("main");
-
-  useEffect(() => {
-    const currentWindow = getCurrentWindow();
-    setWindowLabel(currentWindow.label);
-  }, []);
-
-  switch (windowLabel) {
-    case "toolbar":
-      return <ToolbarWindow />;
-    default:
-      return <MainWindow />;
-  }
+  return <MainWindow />;
 }
 
 export default App;

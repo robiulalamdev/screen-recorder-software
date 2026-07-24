@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface FloatingToolbarProps {
   isPaused: boolean;
@@ -30,12 +30,9 @@ export default function FloatingToolbar({
   onBrushSizeChange,
 }: FloatingToolbarProps) {
   const [elapsed, setElapsed] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [micEnabled, setMicEnabled] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [showDrawingTools, setShowDrawingTools] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,20 +47,6 @@ export default function FloatingToolbar({
     const sec = (s % 60).toString().padStart(2, "0");
     return `${m}:${sec}`;
   };
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-  }, [position]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
 
   const drawingTools = [
     { id: "pen", icon: "pen", label: "Draw" },
@@ -83,7 +66,7 @@ export default function FloatingToolbar({
       {showDrawingTools && (
         <div
           className="fixed z-50 bg-[#1a1a2e] border border-[#2a2a3e] rounded-xl p-3 shadow-2xl"
-          style={{ left: position.x, top: position.y - 60 }}
+          style={{ left: "50%", top: 110, transform: "translateX(-50%)" }}
         >
           <div className="flex items-center gap-1 mb-3">
             {drawingTools.map((tool) => (
@@ -140,12 +123,9 @@ export default function FloatingToolbar({
       {/* Main toolbar */}
       <div
         ref={toolbarRef}
-        className="fixed z-50 bg-[#1a1a2e] border border-[#2a2a3e] rounded-2xl px-3 py-2 shadow-2xl flex items-center gap-1"
-        style={{ left: `calc(50% + ${position.x}px)`, top: `calc(50% + ${position.y}px)`, transform: "translate(-50%, -50%)" }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        data-tauri-drag-region
+        className="fixed z-50 bg-[#1a1a2e] border border-[#2a2a3e] rounded-2xl px-3 py-2.5 shadow-2xl flex items-center gap-1"
+        style={{ left: 0, right: 0, top: 8, bottom: 0, justifyContent: "center", alignItems: "center" }}
       >
         {/* More options */}
         <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
