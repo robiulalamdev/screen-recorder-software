@@ -191,12 +191,8 @@ function MainWindow() {
         return;
       }
 
-      // Minimize the app window so it doesn't appear in the screenshot
-      const win = getCurrentWindow();
-      await win.minimize();
-      await new Promise((r) => setTimeout(r, 300));
-
       // Capture a screenshot of the screen for the selection overlay
+      // Don't minimize — overlay renders inside the app window
       try {
         const path = await invoke<string>("capture_screen");
         setScreenshotPath(path);
@@ -216,10 +212,10 @@ function MainWindow() {
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
 
-    // Restore the app window after selection
+    // Minimize app so it's not captured in recording
     const win = getCurrentWindow();
-    await win.unminimize();
-    await new Promise((r) => setTimeout(r, 200));
+    await win.minimize();
+    await new Promise((r) => setTimeout(r, 300));
 
     if (settings.countdownEnabled) {
       setRecordingState("countdown");

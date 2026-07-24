@@ -1,33 +1,9 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg-primary: var(--bg-primary);
-  --color-bg-secondary: var(--bg-secondary);
-  --color-bg-tertiary: var(--bg-tertiary);
-  --color-bg-elevated: var(--bg-elevated);
-  --color-bg-hover: var(--bg-hover);
-  --color-bg-active: var(--bg-active);
-  --color-bg-gradient: var(--bg-gradient);
-  --color-bg-gradient-hover: var(--bg-gradient-hover);
-  --color-border-primary: var(--border-primary);
-  --color-border-secondary: var(--border-secondary);
-  --color-border-accent: var(--border-accent);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-tertiary: var(--text-tertiary);
-  --color-text-muted: var(--text-muted);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-text: var(--accent-text);
-  --color-accent-bg: var(--accent-bg);
-  --color-accent-border: var(--accent-border);
-  --color-danger-text: var(--danger-text);
-  --color-danger-bg: var(--danger-bg);
-  --color-success-bg: var(--success-bg);
-  --color-success-text: var(--success-text);
-}
+/* ==============================
+   THEME CSS VARIABLES
+   ============================== */
 
-/* Dark theme (default) */
 :root, .dark {
   --bg-primary: #0d0d14;
   --bg-secondary: #13131f;
@@ -35,10 +11,6 @@
   --bg-elevated: #1a1a2e;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(139, 92, 246, 0.15);
-  --bg-gradient-from: rgba(139, 92, 246, 0.15);
-  --bg-gradient-to: rgba(59, 130, 246, 0.15);
-  --bg-gradient-hover-from: rgba(139, 92, 246, 0.25);
-  --bg-gradient-hover-to: rgba(59, 130, 246, 0.25);
   --border-primary: #1e1e2e;
   --border-secondary: #2a2a3e;
   --border-accent: rgba(139, 92, 246, 0.3);
@@ -58,7 +30,6 @@
   color-scheme: dark;
 }
 
-/* Light theme */
 .light {
   --bg-primary: #f8f9fc;
   --bg-secondary: #ffffff;
@@ -66,10 +37,6 @@
   --bg-elevated: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(139, 92, 246, 0.1);
-  --bg-gradient-from: rgba(139, 92, 246, 0.1);
-  --bg-gradient-to: rgba(59, 130, 246, 0.1);
-  --bg-gradient-hover-from: rgba(139, 92, 246, 0.18);
-  --bg-gradient-hover-to: rgba(59, 130, 246, 0.18);
   --border-primary: #e2e5ee;
   --border-secondary: #d1d5e0;
   --border-accent: rgba(139, 92, 246, 0.35);
@@ -89,7 +56,6 @@
   color-scheme: light;
 }
 
-/* System preference */
 @media (prefers-color-scheme: light) {
   :root:not(.dark):not(.light) {
     --bg-primary: #f8f9fc;
@@ -118,17 +84,38 @@
   }
 }
 
-/* Selection scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-primary);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
+/* ==============================
+   THEME UTILITY CLASSES
+   (use these instead of Tailwind bg-/text-/border-)
+   ============================== */
+
+.bg-bg-primary { background-color: var(--bg-primary); }
+.bg-bg-secondary { background-color: var(--bg-secondary); }
+.bg-bg-tertiary { background-color: var(--bg-tertiary); }
+.bg-bg-elevated { background-color: var(--bg-elevated); }
+.bg-bg-hover { background-color: var(--bg-hover); }
+.bg-bg-active { background-color: var(--bg-active); }
+.bg-accent { background-color: var(--accent); }
+.bg-accent-hover { background-color: var(--accent-hover); }
+.bg-accent-bg { background-color: var(--accent-bg); }
+.bg-danger-bg { background-color: var(--danger-bg); }
+.bg-success-bg { background-color: var(--success-bg); }
+
+.text-text-primary { color: var(--text-primary); }
+.text-text-secondary { color: var(--text-secondary); }
+.text-text-tertiary { color: var(--text-tertiary); }
+.text-text-muted { color: var(--text-muted); }
+.text-accent { color: var(--accent); }
+.text-accent-text { color: var(--accent-text); }
+.text-danger-text { color: var(--danger-text); }
+.text-success-text { color: var(--success-text); }
+
+.border-border-primary { border-color: var(--border-primary); }
+.border-border-secondary { border-color: var(--border-secondary); }
+.border-border-accent { border-color: var(--border-accent); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
