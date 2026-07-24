@@ -664,6 +664,39 @@ fn get_downloads_dir() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn generate_thumbnail(video_path: String) -> Result<String, String> {
+    let thumb_dir = "/tmp/screenrecorder_thumbs";
+    fs::create_dir_all(thumb_dir).map_err(|e| e.to_string())?;
+
+    // Use video filename hash for unique thumbnail
+    let hash: u32 = video_path.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+    let thumb_path = format!("{}/thumb_{}.png", thumb_dir, hash);
+
+    // Check if thumbnail already exists
+    if PathBuf::from(&thumb_path).exists() {
+        return Ok(thumb_path);
+    }
+
+    let output = Command::new("ffmpeg")
+        .args(&[
+            "-i", &video_path,
+            "-ss", "00:00:01",
+            "-vframes", "1",
+            "-vf", "scale=320:-1",
+            "-y",
+            &thumb_path,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to generate thumbnail: {}", e))?;
+
+    if output.status.success() && PathBuf::from(&thumb_path).exists() {
+        Ok(thumb_path)
+    } else {
+        Err("Thumbnail generation failed".into())
+    }
+}
+
+#[tauri::command]
 fn show_notification(title: String, body: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -684,6 +717,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // Build tray menu
             let show = MenuItemBuilder::with_id("show", "Open Screen Recorder").build(app)?;
@@ -766,6 +800,45 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Register global keyboard shortcuts
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+
+            let app_handle = app.handle().clone();
+
+            let shortcuts: Vec<(Shortcut, &str)> = vec![
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR), "global-start-stop"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP), "global-pause-resume"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS), "global-stop"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC), "global-screenshot"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT), "global-toggle-toolbar"),
+            ];
+
+            app.global_shortcut().on_shortcuts(shortcuts, move |shortcut, event| {
+                if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                    let id = match shortcut.id() {
+                        "global-start-stop" => {
+                            let state = RECORDING_STATE.lock().unwrap();
+                            if state.is_recording { "tray-stop-recording" } else { "tray-start-recording" }
+                        }
+                        "global-pause-resume" => "tray-pause-recording",
+                        "global-stop" => "tray-stop-recording",
+                        "global-screenshot" => {
+                            let _ = Command::new("screencapture")
+                                .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs())])
+                                .spawn();
+                            return;
+                        }
+                        "global-toggle-toolbar" => {
+                            let _ = app_handle.emit("toggle-toolbar", ());
+                            return;
+                        }
+                        _ => return,
+                    };
+                    let _ = app_handle.emit(id, ());
+                }
+            }).expect("Failed to register global shortcuts");
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -798,6 +871,7 @@ pub fn run() {
             select_folder,
             get_file_url,
             get_home_dir,
+            generate_thumbnail,
             get_downloads_dir,
             show_notification,
         ])

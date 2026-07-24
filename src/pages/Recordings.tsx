@@ -1,5 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useRecordings } from "../stores/recordingsStore";
+
+function VideoThumbnail({ path }: { path: string }) {
+  const [thumb, setThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<string>("generate_thumbnail", { videoPath: path })
+      .then((p) => setThumb(`https://asset.localhost/${encodeURIComponent(p)}`))
+      .catch(() => {});
+  }, [path]);
+
+  if (thumb) {
+    return <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+  }
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+      <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </svg>
+  );
+}
 
 export default function Recordings() {
   const { recordings, deleteRecording, renameRecording } = useRecordings();
@@ -40,10 +61,10 @@ export default function Recordings() {
             className="flex items-center gap-3 sm:gap-4 p-3 rounded-xl border transition-colors group"
             style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
             onContextMenu={(e) => { e.preventDefault(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}>
-            <div className="hidden sm:flex w-24 h-14 rounded-lg items-center justify-center shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
-                <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" /><rect x="2" y="6" width="14" height="12" rx="2" />
-              </svg>
+            {/* Video Thumbnail */}
+            <div className="w-24 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
+              style={{ backgroundColor: "var(--bg-elevated)" }}>
+              <VideoThumbnail path={rec.path} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
@@ -64,30 +85,49 @@ export default function Recordings() {
         ))}
       </div>
 
+      {/* Context Menu */}
       {contextMenu && (
-        <div className="fixed z-50 rounded-xl p-1.5 shadow-2xl min-w-[160px]"
+        <div className="fixed z-50 rounded-xl p-1.5 shadow-2xl min-w-[180px]"
           style={{ left: contextMenu.x, top: contextMenu.y, backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-secondary)" }}
           onClick={(e) => e.stopPropagation()}>
           {[
-            { id: "rename", label: "Rename" },
-            { id: "copyPath", label: "Copy Path" },
-            { id: "delete", label: "Delete" },
+            { id: "rename", label: "Rename", icon: "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" },
+            { id: "copyPath", label: "Copy Path", icon: "M9 9h13a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2" },
+            { id: "open", label: "Open File", icon: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" },
+            { id: "openFolder", label: "Show in Finder", icon: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" },
           ].map((item) => (
             <button key={item.id}
               onClick={() => {
                 const rec = recordings.find((r) => r.id === contextMenu.id);
-                if (rec) {
-                  setContextMenu(null);
-                  if (item.id === "delete") deleteRecording(rec.id);
-                  else if (item.id === "copyPath") navigator.clipboard?.writeText(rec.path);
-                  else if (item.id === "rename") { const n = prompt("Rename:", rec.name); if (n) renameRecording(rec.id, n); }
-                }
+                if (!rec) return;
+                setContextMenu(null);
+                if (item.id === "rename") { const n = prompt("Rename:", rec.name); if (n) renameRecording(rec.id, n); }
+                else if (item.id === "copyPath") navigator.clipboard?.writeText(rec.path);
+                else if (item.id === "open") invoke("open_file", { path: rec.path }).catch(console.error);
+                else if (item.id === "openFolder") invoke("open_folder", { path: rec.path }).catch(console.error);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
-              style={{ color: item.id === "delete" ? "var(--danger-text)" : "var(--text-secondary)" }}>
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:bg-bg-hover"
+              style={{ color: "var(--text-secondary)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={item.icon} />
+              </svg>
               {item.label}
             </button>
           ))}
+          <div style={{ height: "1px", backgroundColor: "var(--border-primary)", margin: "4px 0" }} />
+          <button
+            onClick={() => {
+              const rec = recordings.find((r) => r.id === contextMenu.id);
+              if (rec) { setContextMenu(null); deleteRecording(rec.id); }
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors hover:bg-bg-hover"
+            style={{ color: "var(--danger-text)" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+            Delete
+          </button>
         </div>
       )}
 
