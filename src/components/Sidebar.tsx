@@ -54,32 +54,54 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   return (
-    <aside className="w-[220px] shrink-0 flex flex-col h-full border-r" style={{ backgroundColor: "var(--bg-secondary)", borderColor: "var(--border-primary)" }}>
+    <aside
+      className="w-[220px] shrink-0 flex flex-col"
+      style={{
+        backgroundColor: "var(--bg-secondary)",
+        borderRight: "1px solid var(--border-primary)",
+        height: "100vh",
+      }}
+    >
       {/* Logo */}
-      <div className="p-5 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shrink-0">
+      <div style={{ padding: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <div
+          className="bg-gradient-to-br from-purple-500 to-blue-500"
+          style={{ width: "32px", height: "32px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
             <circle cx="12" cy="12" r="5" />
           </svg>
         </div>
-        <span className="font-semibold text-sm tracking-tight" style={{ color: "var(--text-primary)" }}>ScreenRecorder</span>
+        <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>ScreenRecorder</span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 mt-2">
+      {/* Navigation — flex-1 pushes bottom items down */}
+      <nav style={{ flex: 1, padding: "0 12px" }}>
         {navItems.map((item) => {
           const isActive = currentPage === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1"
               style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "10px 12px",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: 500,
+                marginBottom: "4px",
+                border: "none",
+                cursor: "pointer",
                 backgroundColor: isActive ? "var(--accent-bg)" : "transparent",
                 color: isActive ? "var(--accent-text)" : "var(--text-muted)",
+                textAlign: "left",
+                transition: "all 0.15s",
               }}
             >
-              <span style={{ color: isActive ? "var(--accent-text)" : "var(--text-muted)" }}>
+              <span style={{ color: isActive ? "var(--accent-text)" : "var(--text-muted)", flexShrink: 0 }}>
                 {iconMap[item.icon]}
               </span>
               {item.label}
@@ -88,23 +110,60 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* Premium Card */}
-      <div className="mx-3 mb-3 p-3 rounded-xl" style={{ backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)" }}>
-        <p className="text-xs font-semibold" style={{ color: "var(--accent-text)" }}>Go Premium</p>
-        <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>Unlock powerful features</p>
-        <button className="mt-2.5 w-full py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 text-xs font-medium text-white transition-colors">
+      {/* Go Premium — stays at bottom */}
+      <div
+        style={{
+          margin: "0 12px 12px",
+          padding: "12px",
+          borderRadius: "12px",
+          backgroundColor: "var(--accent-bg)",
+          border: "1px solid var(--accent-border)",
+        }}
+      >
+        <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
+        <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
+        <button
+          className="bg-purple-500 hover:bg-purple-600"
+          style={{
+            marginTop: "10px",
+            width: "100%",
+            padding: "6px 0",
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: "white",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
           Upgrade
         </button>
       </div>
 
-      {/* User */}
-      <div className="px-3 pb-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+      {/* User — at very bottom */}
+      <div style={{ padding: "0 12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
+        <div
+          style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            backgroundColor: "var(--bg-tertiary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: "var(--text-secondary)",
+            flexShrink: 0,
+          }}
+        >
           MR
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>Md. Robiul Alam</p>
-          <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Offline Mode</p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Md. Robiul Alam
+          </p>
+          <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
         </div>
       </div>
     </aside>
