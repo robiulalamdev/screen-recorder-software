@@ -17,6 +17,8 @@
         "title": "Screen Recorder",
         "width": 1200,
         "height": 800,
+        "minWidth": 510,
+        "minHeight": 400,
         "resizable": true,
         "decorations": true,
         "center": true,

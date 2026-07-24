@@ -189,30 +189,42 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     {/* Toggle button — on the border, vertically centered */}
     <button
       onClick={() => setCollapsed(!collapsed)}
-      title={collapsed ? "Expand" : "Collapse"}
+      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      className="sidebar-toggle"
       style={{
         position: "absolute",
-        right: "-14px",
+        right: "-16px",
         top: "50%",
         transform: "translateY(-50%)",
-        width: "28px",
-        height: "28px",
+        width: "32px",
+        height: "32px",
         borderRadius: "50%",
-        border: "1px solid var(--border-primary)",
-        backgroundColor: "var(--bg-elevated)",
+        border: "2px solid var(--border-secondary)",
+        backgroundColor: "var(--bg-secondary)",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         color: "var(--text-muted)",
         zIndex: 10,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-        transition: "all 0.15s",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
+        transition: "all 0.2s ease",
+        outline: "2px solid var(--bg-primary)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = "var(--accent-bg)";
+        e.currentTarget.style.borderColor = "var(--accent-border)";
+        e.currentTarget.style.color = "var(--accent-text)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "var(--bg-secondary)";
+        e.currentTarget.style.borderColor = "var(--border-secondary)";
+        e.currentTarget.style.color = "var(--text-muted)";
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-        style={{ transition: "transform 0.2s", transform: collapsed ? "rotate(180deg)" : "rotate(0deg)" }}>
-        <path d="m15 18 6-6-6-6" />
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ transition: "transform 0.25s ease", transform: collapsed ? "rotate(180deg)" : "rotate(0deg)" }}>
+        <polyline points="9 18 15 12 9 6" />
       </svg>
     </button>
     </div>
