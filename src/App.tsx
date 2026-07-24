@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
+import ThemeProvider from "./components/ThemeProvider";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Recordings from "./pages/Recordings";
@@ -302,7 +303,7 @@ function MainWindow() {
   const isRecording = recordingState === "recording" || recordingState === "paused";
 
   return (
-    <div className="min-h-screen bg-[#0d0d14] text-white flex flex-col">
+    <div className="min-h-screen bg-bg-primary text-text-primary flex flex-col">
       {/* Recording toolbar - shown at top during recording */}
       {isRecording && (
         <div className="shrink-0">
@@ -415,7 +416,11 @@ function MainWindow() {
 }
 
 function App() {
-  return <MainWindow />;
+  return (
+    <ThemeProvider>
+      <MainWindow />
+    </ThemeProvider>
+  );
 }
 
 export default App;

@@ -9,34 +9,10 @@ interface DashboardProps {
 }
 
 const actionCards = [
-  {
-    id: "recording",
-    title: "Start Recording",
-    shortcut: "Ctrl + Shift + R",
-    icon: "record",
-    color: "from-purple-500 to-blue-500",
-  },
-  {
-    id: "window",
-    title: "Record Window",
-    shortcut: "Alt + Shift + W",
-    icon: "window",
-    color: "from-zinc-700 to-zinc-600",
-  },
-  {
-    id: "area",
-    title: "Record Area",
-    shortcut: "Alt + Shift + A",
-    icon: "area",
-    color: "from-zinc-700 to-zinc-600",
-  },
-  {
-    id: "settings",
-    title: "Settings",
-    shortcut: "Ctrl + ,",
-    icon: "settings",
-    color: "from-zinc-700 to-zinc-600",
-  },
+  { id: "recording", title: "Start Recording", shortcut: "Ctrl + Shift + R", icon: "record" },
+  { id: "window", title: "Record Window", shortcut: "Alt + Shift + W", icon: "window" },
+  { id: "area", title: "Record Area", shortcut: "Alt + Shift + A", icon: "area" },
+  { id: "settings", title: "Settings", shortcut: "Ctrl + ,", icon: "settings" },
 ];
 
 function ActionIcon({ icon }: { icon: string }) {
@@ -81,19 +57,19 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
   const recentRecordings = recordings.slice(0, 4);
 
   return (
-    <div className="p-6 max-w-[900px]">
+    <div className="p-4 sm:p-6 w-full max-w-[900px]">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-xl sm:text-2xl font-semibold text-text-primary">
           Welcome back! 👋
         </h1>
-        <p className="text-sm text-zinc-500 mt-1">
+        <p className="text-sm text-text-muted mt-1">
           Record your screen, share your ideas.
         </p>
       </div>
 
-      {/* Action Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      {/* Action Cards — responsive grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8">
         {actionCards.map((card) => (
           <button
             key={card.id}
@@ -102,24 +78,24 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
               else if (card.id === "settings") onNavigate("settings", "general");
               else onNavigate("dashboard");
             }}
-            className={`flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:scale-[1.02] ${
+            className={`flex flex-col items-center gap-3 p-4 sm:p-5 rounded-xl border transition-all hover:scale-[1.02] ${
               card.id === "recording"
                 ? "bg-gradient-to-br from-purple-500/15 to-blue-500/15 border-purple-500/30 hover:border-purple-500/50"
-                : "bg-[#16162a] border-[#1e1e2e] hover:border-zinc-600"
+                : "bg-bg-tertiary border-border-primary hover:border-border-secondary"
             }`}
           >
             <div
-              className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center ${
                 card.id === "recording"
                   ? "bg-gradient-to-br from-purple-500 to-blue-500 text-white"
-                  : "bg-zinc-800 text-zinc-300"
+                  : "bg-bg-elevated text-text-secondary"
               }`}
             >
               <ActionIcon icon={card.icon} />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium">{card.title}</p>
-              <p className="text-[11px] text-zinc-500 mt-0.5">{card.shortcut}</p>
+              <p className="text-sm font-medium text-text-primary">{card.title}</p>
+              <p className="text-[11px] text-text-muted mt-0.5">{card.shortcut}</p>
             </div>
           </button>
         ))}
@@ -128,10 +104,10 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
       {/* Recent Recordings */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold">Recent Recordings</h2>
+          <h2 className="text-sm font-semibold text-text-primary">Recent Recordings</h2>
           <button
             onClick={() => onNavigate("recordings")}
-            className="text-xs text-zinc-400 hover:text-white transition-colors"
+            className="text-xs text-text-muted hover:text-text-primary transition-colors"
           >
             View all
           </button>
@@ -141,11 +117,11 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
           {recentRecordings.map((rec) => (
             <div
               key={rec.id}
-              className="flex items-center gap-4 p-3 rounded-xl bg-[#16162a] border border-[#1e1e2e] hover:border-zinc-600 transition-colors cursor-pointer group"
+              className="flex items-center gap-3 sm:gap-4 p-3 rounded-xl bg-bg-tertiary border border-border-primary hover:border-border-secondary transition-colors cursor-pointer group"
             >
-              {/* Thumbnail */}
-              <div className="w-24 h-14 rounded-lg bg-zinc-800 overflow-hidden flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-600">
+              {/* Thumbnail — hide on very small screens */}
+              <div className="hidden sm:flex w-24 h-14 rounded-lg bg-bg-elevated overflow-hidden items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted">
                   <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
                   <rect x="2" y="6" width="14" height="12" rx="2" />
                 </svg>
@@ -153,69 +129,43 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{rec.name}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
+                <p className="text-sm font-medium text-text-primary truncate">{rec.name}</p>
+                <p className="text-xs text-text-muted mt-0.5">
                   {rec.duration} &middot; {rec.resolution} &middot; {rec.fps}
                 </p>
               </div>
 
-              {/* Size & Date */}
-              <div className="text-right shrink-0">
-                <p className="text-xs text-zinc-400">{rec.size}</p>
-                <p className="text-[11px] text-zinc-500 mt-0.5">{rec.date}</p>
+              {/* Size & Date — hide on very small screens */}
+              <div className="text-right shrink-0 hidden sm:block">
+                <p className="text-xs text-text-secondary">{rec.size}</p>
+                <p className="text-[11px] text-text-muted mt-0.5">{rec.date}</p>
               </div>
 
               {/* Play */}
               <button
                 onClick={() => invoke("open_file", { path: rec.path }).catch(console.error)}
-                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="w-8 h-8 rounded-full bg-bg-elevated hover:bg-bg-tertiary flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-text-primary">
                   <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </button>
-
-              {/* More */}
-              <button className="w-8 h-8 rounded-full hover:bg-zinc-800 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-400">
-                  <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
                 </svg>
               </button>
             </div>
           ))}
         </div>
 
-        {/* Search & View Toggle */}
+        {/* Search */}
         <div className="flex items-center gap-3 mt-4">
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e]">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-500">
+          <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-tertiary border border-border-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
             </svg>
             <input
               type="text"
               placeholder="Search recordings..."
-              className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
+              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
             />
           </div>
-          <button className="p-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-            </svg>
-          </button>
-          <button className="p-2 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
-          </button>
-          <button className="p-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-zinc-400 hover:text-white transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-            </svg>
-          </button>
         </div>
       </div>
     </div>
