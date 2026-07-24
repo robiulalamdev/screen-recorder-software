@@ -71,23 +71,23 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       }}
     >
       {/* Logo + Toggle */}
-      <div style={{ padding: collapsed ? "20px 0" : "20px", display: "flex", alignItems: "center", gap: "10px", justifyContent: collapsed ? "center" : "flex-start" }}>
+      <div style={{ padding: "16px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
         <div
           className="bg-gradient-to-br from-purple-500 to-blue-500"
           style={{ width: "32px", height: "32px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5" /></svg>
         </div>
-        {!collapsed && <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>ScreenRecorder</span>}
-      </div>
-
-      {/* Toggle collapse */}
-      {!collapsed && (
+        {!collapsed && (
+          <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", flex: 1 }}>ScreenRecorder</span>
+        )}
+        {/* Toggle button — always visible, right side of logo row */}
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           style={{
-            margin: "0 12px 4px",
-            padding: "6px",
+            width: "28px",
+            height: "28px",
             borderRadius: "6px",
             border: "1px solid var(--border-primary)",
             backgroundColor: "transparent",
@@ -96,13 +96,16 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             alignItems: "center",
             justifyContent: "center",
             color: "var(--text-muted)",
+            flexShrink: 0,
+            transition: "all 0.15s",
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            style={{ transition: "transform 0.2s", transform: collapsed ? "rotate(180deg)" : "rotate(0deg)" }}>
             <path d="m15 18 6-6-6-6" />
           </svg>
         </button>
-      )}
+      </div>
 
       {/* Navigation */}
       <nav style={{ flex: 1, padding: collapsed ? "8px 6px" : "0 12px" }}>
