@@ -56,66 +56,11 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not(.dark):not(.light) {
-    --bg-primary: #f8f9fc;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f1f3f9;
-    --bg-elevated: #ffffff;
-    --bg-hover: rgba(0, 0, 0, 0.04);
-    --bg-active: rgba(139, 92, 246, 0.1);
-    --border-primary: #e2e5ee;
-    --border-secondary: #d1d5e0;
-    --border-accent: rgba(139, 92, 246, 0.35);
-    --text-primary: #18181b;
-    --text-secondary: #3f3f46;
-    --text-tertiary: #71717a;
-    --text-muted: #a1a1aa;
-    --accent: #7c3aed;
-    --accent-hover: #6d28d9;
-    --accent-text: #7c3aed;
-    --accent-bg: rgba(139, 92, 246, 0.1);
-    --accent-border: rgba(139, 92, 246, 0.35);
-    --danger-text: #dc2626;
-    --danger-bg: rgba(220, 38, 38, 0.08);
-    --success-bg: rgba(22, 163, 74, 0.1);
-    --success-text: #16a34a;
-    color-scheme: light;
-  }
-}
-
-/* ==============================
-   THEME UTILITY CLASSES
-   (use these instead of Tailwind bg-/text-/border-)
-   ============================== */
-
-.bg-bg-primary { background-color: var(--bg-primary); }
-.bg-bg-secondary { background-color: var(--bg-secondary); }
-.bg-bg-tertiary { background-color: var(--bg-tertiary); }
-.bg-bg-elevated { background-color: var(--bg-elevated); }
-.bg-bg-hover { background-color: var(--bg-hover); }
-.bg-bg-active { background-color: var(--bg-active); }
-.bg-accent { background-color: var(--accent); }
-.bg-accent-hover { background-color: var(--accent-hover); }
-.bg-accent-bg { background-color: var(--accent-bg); }
-.bg-danger-bg { background-color: var(--danger-bg); }
-.bg-success-bg { background-color: var(--success-bg); }
-
-.text-text-primary { color: var(--text-primary); }
-.text-text-secondary { color: var(--text-secondary); }
-.text-text-tertiary { color: var(--text-tertiary); }
-.text-text-muted { color: var(--text-muted); }
-.text-accent { color: var(--accent); }
-.text-accent-text { color: var(--accent-text); }
-.text-danger-text { color: var(--danger-text); }
-.text-success-text { color: var(--success-text); }
-
-.border-border-primary { border-color: var(--border-primary); }
-.border-border-secondary { border-color: var(--border-secondary); }
-.border-border-accent { border-color: var(--border-accent); }
-
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Selection styling */
+::selection { background: rgba(139, 92, 246, 0.3); }
