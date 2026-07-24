@@ -295,7 +295,7 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
     args.push(output_path.clone());
 
     // Spawn ffmpeg process
-    let child = Command::new("ffmpeg")
+    let child = Command::new(&get_ffmpeg_path())
         .args(&args)
         .spawn()
         .map_err(|e| {
@@ -462,9 +462,37 @@ fn get_recording_info(path: String) -> Result<serde_json::Value, String> {
     Ok(info)
 }
 
+fn get_ffmpeg_path() -> String {
+    // First check if bundled ffmpeg exists next to the app binary
+    if let Some(exe_path) = std::env::current_exe().ok() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let bundled = exe_dir.join("ffmpeg");
+            if bundled.exists() {
+                return bundled.to_string_lossy().to_string();
+            }
+        }
+    }
+
+    // Check common bundled locations
+    let resource_dirs = [
+        "/Applications/Screen Recorder.app/Contents/Resources",
+        "./resources",
+    ];
+    for dir in &resource_dirs {
+        let ffmpeg_path = format!("{}/ffmpeg", dir);
+        if std::path::Path::new(&ffmpeg_path).exists() {
+            return ffmpeg_path;
+        }
+    }
+
+    // Fall back to system ffmpeg
+    "ffmpeg".to_string()
+}
+
 #[tauri::command]
 fn check_ffmpeg_installed() -> bool {
-    Command::new("ffmpeg")
+    let ffmpeg_path = get_ffmpeg_path();
+    Command::new(&ffmpeg_path)
         .arg("-version")
         .output()
         .is_ok()
@@ -472,7 +500,7 @@ fn check_ffmpeg_installed() -> bool {
 
 #[tauri::command]
 fn get_available_devices() -> Result<serde_json::Value, String> {
-    let output = Command::new("ffmpeg")
+    let output = Command::new(&get_ffmpeg_path())
         .args(&["-f", "avfoundation", "-list_devices", "true", "-i", ""])
         .output()
         .map_err(|e| format!("Failed to list devices: {}", e))?;
@@ -677,7 +705,7 @@ fn generate_thumbnail(video_path: String) -> Result<String, String> {
         return Ok(thumb_path);
     }
 
-    let output = Command::new("ffmpeg")
+    let output = Command::new(&get_ffmpeg_path())
         .args(&[
             "-i", &video_path,
             "-ss", "00:00:01",

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import ThemeProvider from "./components/ThemeProvider";
 import Sidebar from "./components/Sidebar";
@@ -120,7 +121,12 @@ function MainWindow() {
       const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) { setError({ type: "disk-full" }); return; }
 
-      // Capture screenshot of the screen — app stays at normal size
+      // Go fullscreen so the selection overlay covers the ENTIRE desktop
+      const win = getCurrentWindow();
+      await win.setFullscreen(true);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Capture screenshot of the full screen
       try {
         const path = await invoke<string>("capture_screen");
         setScreenshotPath(path);
@@ -135,8 +141,13 @@ function MainWindow() {
   const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
-    setRecordingState("selecting"); // back to idle briefly
-    await new Promise((r) => setTimeout(r, 100));
+
+    // Exit fullscreen before countdown
+    try {
+      const win = getCurrentWindow();
+      await win.setFullscreen(false);
+      await new Promise((r) => setTimeout(r, 300));
+    } catch {}
 
     if (settings.countdownEnabled) {
       setRecordingState("countdown");
@@ -202,6 +213,10 @@ function MainWindow() {
           screenshotPath={screenshotPath}
           onCapture={handleCapture}
           onCancel={async () => {
+            try {
+              const win = getCurrentWindow();
+              await win.setFullscreen(false);
+            } catch {}
             setRecordingState("idle");
             setScreenshotPath(null);
           }}
