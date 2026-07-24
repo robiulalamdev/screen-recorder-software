@@ -20,10 +20,10 @@ interface CanvasDrawingProps {
   tool: DrawTool | null;
   color: string;
   brushSize: number;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export default function CanvasDrawing({

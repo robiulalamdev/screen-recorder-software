@@ -46,23 +46,50 @@ static RECORDING_STATE: Mutex<RecordingState> = Mutex::new(RecordingState {
 
 #[tauri::command]
 fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Hide main window during recording so it's not captured
+    // Minimize main window during recording so it's not captured
     if let Some(main_window) = app.get_webview_window("main") {
-        let _ = main_window.hide();
+        let _ = main_window.set_skip_taskbar(true);
     }
-
-    // Show recording indicator via system notification
-    let _ = Command::new("osascript")
-        .args(&["-e", r#"display notification "Recording in progress. Press Ctrl+Shift+R to stop." with title "Screen Recorder""#])
-        .output();
 
     Ok(())
 }
 
 #[tauri::command]
 fn close_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Show main window again after recording stops
     if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.set_skip_taskbar(false);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn capture_screen() -> Result<String, String> {
+    let path = "/tmp/screenrecorder_selection_bg.png";
+    let output = Command::new("screencapture")
+        .args(&["-x", "-t", "png", path])
+        .output()
+        .map_err(|e| format!("Failed to capture screen: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Screenshot failed: {}", stderr));
+    }
+
+    Ok(path.to_string())
+}
+
+#[tauri::command]
+fn minimize_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.minimize();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn restore_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.unminimize();
         let _ = main_window.show();
         let _ = main_window.set_focus();
     }
@@ -75,6 +102,18 @@ fn get_screen_size(app: tauri::AppHandle) -> Result<(f64, f64), String> {
     let monitor = main_window.primary_monitor().map_err(|e| e.to_string())?.ok_or("No monitor found")?;
     let size = monitor.size();
     Ok((size.width as f64, size.height as f64))
+}
+
+fn expand_home(path: &str) -> String {
+    if path.starts_with("~/") || path == "~" {
+        let home = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .to_string_lossy()
+            .to_string();
+        path.replacen("~", &home, 1)
+    } else {
+        path.to_string()
+    }
 }
 
 fn get_save_path(save_location: &str, format: &str) -> Result<String, String> {
@@ -107,9 +146,8 @@ fn get_save_path(save_location: &str, format: &str) -> Result<String, String> {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("ScreenRecorder")
     } else {
-        PathBuf::from(save_location.replace("~", &dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .to_string_lossy()))
+        let expanded = expand_home(save_location);
+        PathBuf::from(&expanded)
     };
 
     let year_dir = base.join(y.to_string());
@@ -344,9 +382,7 @@ fn take_screenshot(save_location: Option<String>) -> Result<String, String> {
 
 #[tauri::command]
 fn open_file(path: String) -> Result<(), String> {
-    let expanded_path = path.replace("~", &dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy());
+    let expanded_path = expand_home(&path);
     Command::new("open")
         .arg(&expanded_path)
         .spawn()
@@ -356,9 +392,7 @@ fn open_file(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_folder(path: String) -> Result<(), String> {
-    let expanded_path = path.replace("~", &dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy());
+    let expanded_path = expand_home(&path);
     Command::new("open")
         .args(&["-R", &expanded_path])
         .spawn()
@@ -448,10 +482,7 @@ fn ensure_save_directory(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_disk_space(path: String) -> Result<serde_json::Value, String> {
-    // Expand ~ to home directory
-    let expanded_path = path.replace("~", &dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy());
+    let expanded_path = expand_home(&path);
 
     let output = Command::new("df")
         .args(&["-k", &expanded_path])
@@ -502,9 +533,7 @@ fn get_file_size(path: String) -> Result<u64, String> {
 #[tauri::command]
 fn check_file_exists(path: String) -> Result<bool, String> {
     // Expand ~ in path
-    let expanded_path = path.replace("~", &dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy());
+    let expanded_path = expand_home(&path);
     Ok(PathBuf::from(&expanded_path).exists())
 }
 
@@ -512,10 +541,7 @@ fn check_file_exists(path: String) -> Result<bool, String> {
 fn validate_recordings(paths: Vec<String>) -> Result<Vec<String>, String> {
     let mut valid_paths = Vec::new();
     for path in paths {
-        // Expand ~ in path
-        let expanded_path = path.replace("~", &dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .to_string_lossy());
+        let expanded_path = expand_home(&path);
         if PathBuf::from(&expanded_path).exists() {
             valid_paths.push(path);
         }
@@ -574,12 +600,8 @@ async fn select_folder(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 fn get_file_url(path: String) -> Result<String, String> {
     // Expand ~ in path
-    let expanded_path = path.replace("~", &dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy());
-
-    // Return the expanded path - frontend will handle URL conversion
-    Ok(expanded_path.to_string())
+    let expanded_path = expand_home(&path);
+    Ok(expanded_path)
 }
 
 #[tauri::command]
@@ -706,6 +728,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             create_toolbar_window,
             close_toolbar_window,
+            capture_screen,
+            minimize_main_window,
+            restore_main_window,
             get_screen_size,
             start_recording,
             stop_recording,

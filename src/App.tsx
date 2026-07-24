@@ -10,6 +10,9 @@ import ShortcutsPage from "./pages/ShortcutsPage";
 import About from "./pages/About";
 import SelectionOverlay from "./components/SelectionOverlay";
 import Countdown from "./components/Countdown";
+import FloatingToolbar from "./components/FloatingToolbar";
+import CanvasDrawing from "./components/CanvasDrawing";
+import type { DrawTool } from "./components/CanvasDrawing";
 import RecordingSuccess from "./components/RecordingSuccess";
 import CameraOverlay from "./components/CameraOverlay";
 import ErrorNotification from "./components/ErrorNotification";
@@ -36,8 +39,11 @@ function MainWindow() {
   } | null>(null);
   const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
+  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
+  const [activeDrawTool, setActiveDrawTool] = useState<DrawTool | null>(null);
+  const [drawColor, setDrawColor] = useState("#ef4444");
+  const [brushSize, setBrushSize] = useState(4);
 
-  // Use refs for values that event listeners need — avoids stale closures
   const recordingStartTimeRef = useRef<number>(0);
   const actualFilePathRef = useRef<string | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
@@ -46,13 +52,11 @@ function MainWindow() {
   const { settings } = useSettings();
   const { addRecording } = useRecordings();
 
-  // Keep recordingState ref in sync
   useEffect(() => {
     recordingStateRef.current = recordingState;
   }, [recordingState]);
 
   const handleStopRecording = useCallback(async () => {
-    // Guard against double-stop
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
 
@@ -60,11 +64,10 @@ function MainWindow() {
       await invoke("stop_recording");
     } catch {}
 
-    // Wait for ffmpeg to finalize the file (Rust waits up to 3s + kill)
     await new Promise((r) => setTimeout(r, 2000));
 
     try {
-      await invoke("close_toolbar_window");
+      await invoke("restore_main_window");
     } catch {}
 
     const duration = Date.now() - recordingStartTimeRef.current;
@@ -99,6 +102,7 @@ function MainWindow() {
 
     setSavedRecording({ fileName, fileSize, duration: durationStr, filePath });
     setCameraVisible(false);
+    setActiveDrawTool(null);
     setRecordingState("saved");
     isStoppingRef.current = false;
 
@@ -108,6 +112,13 @@ function MainWindow() {
         body: `${fileName} has been saved.`,
       });
     } catch {}
+
+    // Auto-open the recorded video so user can see it instantly
+    if (filePath) {
+      try {
+        await invoke("open_file", { path: filePath });
+      } catch {}
+    }
 
     if (settings.autoOpenFolder) {
       try {
@@ -179,9 +190,20 @@ function MainWindow() {
         return;
       }
 
+      // Minimize the app window so it doesn't appear in the screenshot
       const win = getCurrentWindow();
-      await win.setFullscreen(true);
+      await win.minimize();
       await new Promise((r) => setTimeout(r, 300));
+
+      // Capture a screenshot of the screen for the selection overlay
+      try {
+        const path = await invoke<string>("capture_screen");
+        setScreenshotPath(path);
+      } catch {
+        setScreenshotPath(null);
+      }
+
+      // Show selection overlay
       setRecordingState("selecting");
     } catch (err) {
       console.error("Failed to start recording:", err);
@@ -193,18 +215,25 @@ function MainWindow() {
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
 
+    // Restore the app window after selection
     const win = getCurrentWindow();
-    await win.setFullscreen(false);
+    await win.unminimize();
     await new Promise((r) => setTimeout(r, 200));
 
-    setRecordingState("countdown");
-  }, []);
+    if (settings.countdownEnabled) {
+      setRecordingState("countdown");
+    } else {
+      // Skip countdown, start recording directly
+      handleCountdownComplete();
+    }
+  }, [settings.countdownEnabled]);
 
   const handleCountdownComplete = useCallback(async () => {
+    // Minimize app window so it doesn't appear in recording
     try {
-      await invoke("create_toolbar_window");
+      await invoke("minimize_main_window");
     } catch (err) {
-      console.error("Failed to hide window:", err);
+      console.error("Failed to minimize window:", err);
     }
 
     recordingStartTimeRef.current = Date.now();
@@ -233,7 +262,7 @@ function MainWindow() {
     } catch (err) {
       console.error("Failed to start recording:", err);
       setError({ type: "recording-failed", message: String(err) });
-      await invoke("close_toolbar_window");
+      await invoke("restore_main_window");
       setRecordingState("idle");
     }
   }, [settings, captureMode, captureBounds]);
@@ -242,10 +271,15 @@ function MainWindow() {
     setRecordingState("idle");
     setSavedRecording(null);
     actualFilePathRef.current = null;
+    setScreenshotPath(null);
   }, []);
 
   const handleCameraToggle = useCallback(() => {
     setCameraVisible((prev) => !prev);
+  }, []);
+
+  const handleTogglePause = useCallback(() => {
+    setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
   }, []);
 
   const renderPage = () => {
@@ -268,25 +302,64 @@ function MainWindow() {
   const isRecording = recordingState === "recording" || recordingState === "paused";
 
   return (
-    <div className="min-h-screen bg-[#0d0d14] text-white flex">
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
-      <main className="flex-1 overflow-y-auto">{renderPage()}</main>
+    <div className="min-h-screen bg-[#0d0d14] text-white flex flex-col">
+      {/* Recording toolbar - shown at top during recording */}
+      {isRecording && (
+        <div className="shrink-0">
+          <FloatingToolbar
+            isPaused={recordingState === "paused"}
+            onTogglePause={handleTogglePause}
+            onStop={handleStopRecording}
+            cameraVisible={cameraVisible}
+            onCameraToggle={handleCameraToggle}
+            activeTool={activeDrawTool}
+            onToolSelect={(t) => setActiveDrawTool(t as DrawTool | null)}
+            drawColor={drawColor}
+            onColorChange={setDrawColor}
+            brushSize={brushSize}
+            onBrushSizeChange={setBrushSize}
+          />
+        </div>
+      )}
 
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar hidden during recording */}
+        {!isRecording && (
+          <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+        )}
+
+        <main className="flex-1 overflow-y-auto">{renderPage()}</main>
+      </div>
+
+      {/* Canvas drawing overlay during recording */}
+      {isRecording && (
+        <CanvasDrawing
+          tool={activeDrawTool}
+          color={drawColor}
+          brushSize={brushSize}
+        />
+      )}
+
+      {/* Selection Overlay — shows screenshot of screen for area selection */}
       {recordingState === "selecting" && (
         <SelectionOverlay
+          screenshotPath={screenshotPath}
           onCapture={handleCapture}
           onCancel={async () => {
             const win = getCurrentWindow();
-            await win.setFullscreen(false);
+            await win.unminimize();
             setRecordingState("idle");
+            setScreenshotPath(null);
           }}
         />
       )}
 
+      {/* Countdown */}
       {recordingState === "countdown" && (
         <Countdown onComplete={handleCountdownComplete} />
       )}
 
+      {/* Camera Overlay */}
       <CameraOverlay
         visible={isRecording && cameraVisible}
         shape={cameraShape}
@@ -294,6 +367,7 @@ function MainWindow() {
         onToggle={handleCameraToggle}
       />
 
+      {/* Recording Success */}
       {recordingState === "saved" && savedRecording && (
         <RecordingSuccess
           fileName={savedRecording.fileName}
@@ -325,6 +399,7 @@ function MainWindow() {
         />
       )}
 
+      {/* Error Notification */}
       {error && (
         <ErrorNotification
           type={error.type}

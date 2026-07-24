@@ -40,54 +40,50 @@ export interface AppSettings {
   };
 }
 
-// Get default save location from Rust backend
-let defaultSaveLocation = "~/Downloads/ScreenRecorder";
-invoke<string>("get_downloads_dir").then((dir) => {
-  defaultSaveLocation = `${dir}/ScreenRecorder`;
-}).catch(() => {});
-
-const defaultSettings: AppSettings = {
-  saveLocation: defaultSaveLocation,
-  autoCreateFolders: true,
-  autoOpenFolder: false,
-  minimizeToTray: true,
-  launchOnStartup: false,
-  startMinimized: false,
-  videoNameFormat: "Recording_{YYYY}-{MM}-{DD}_{HH}-{mm}-{ss}",
-  theme: "dark",
-  language: "English",
-  videoQuality: "high",
-  frameRate: 60,
-  resolution: "original",
-  encoder: "h264",
-  outputFormat: "mp4",
-  countdownEnabled: true,
-  microphone: "Default",
-  systemAudio: "Default",
-  micVolume: 80,
-  systemVolume: 70,
-  noiseSuppression: false,
-  echoCancellation: false,
-  shortcuts: {
-    startStop: "Ctrl + Shift + R",
-    pauseResume: "Ctrl + Shift + P",
-    stop: "Ctrl + Shift + S",
-    mute: "Ctrl + Shift + M",
-    screenshot: "Ctrl + Shift + C",
-    showToolbar: "Ctrl + Shift + T",
-  },
-};
-
 const STORAGE_KEY = "screen-recorder-settings";
+
+function getDefaultSettings(): AppSettings {
+  return {
+    saveLocation: "~/Downloads/ScreenRecorder",
+    autoCreateFolders: true,
+    autoOpenFolder: false,
+    minimizeToTray: true,
+    launchOnStartup: false,
+    startMinimized: false,
+    videoNameFormat: "Recording_{YYYY}-{MM}-{DD}_{HH}-{mm}-{ss}",
+    theme: "dark",
+    language: "English",
+    videoQuality: "high",
+    frameRate: 60,
+    resolution: "original",
+    encoder: "h264",
+    outputFormat: "mp4",
+    countdownEnabled: true,
+    microphone: "Default",
+    systemAudio: "Default",
+    micVolume: 80,
+    systemVolume: 70,
+    noiseSuppression: false,
+    echoCancellation: false,
+    shortcuts: {
+      startStop: "Ctrl + Shift + R",
+      pauseResume: "Ctrl + Shift + P",
+      stop: "Ctrl + Shift + S",
+      mute: "Ctrl + Shift + M",
+      screenshot: "Ctrl + Shift + C",
+      showToolbar: "Ctrl + Shift + T",
+    },
+  };
+}
 
 function loadSettings(): AppSettings {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return { ...defaultSettings, ...JSON.parse(stored) };
+      return { ...getDefaultSettings(), ...JSON.parse(stored) };
     }
   } catch {}
-  return defaultSettings;
+  return getDefaultSettings();
 }
 
 function saveSettings(settings: AppSettings) {
@@ -96,6 +92,20 @@ function saveSettings(settings: AppSettings) {
 
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
+
+  // On first load, fetch the real downloads dir and update if using default
+  useEffect(() => {
+    invoke<string>("get_downloads_dir").then((dir) => {
+      const realDefault = `${dir}/ScreenRecorder`;
+      setSettings((prev) => {
+        // Only update if still using the placeholder default
+        if (prev.saveLocation === "~/Downloads/ScreenRecorder") {
+          return { ...prev, saveLocation: realDefault };
+        }
+        return prev;
+      });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     saveSettings(settings);
