@@ -9,7 +9,7 @@ use tauri::{
     Emitter,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    Manager, WebviewWindowBuilder,
 };
 
 use serde::{Deserialize, Serialize};
@@ -802,42 +802,52 @@ pub fn run() {
                 .build(app)?;
 
             // Register global keyboard shortcuts
-            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
             let app_handle = app.handle().clone();
 
-            let shortcuts: Vec<(Shortcut, &str)> = vec![
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR), "global-start-stop"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP), "global-pause-resume"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS), "global-stop"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC), "global-screenshot"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT), "global-toggle-toolbar"),
+            let shortcuts_list = vec![
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR), "start-stop"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP), "pause-resume"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS), "stop"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC), "screenshot"),
+                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT), "toggle-toolbar"),
             ];
 
-            app.global_shortcut().on_shortcuts(shortcuts, move |shortcut, event| {
-                if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                    let id = match shortcut.id() {
-                        "global-start-stop" => {
-                            let state = RECORDING_STATE.lock().unwrap();
-                            if state.is_recording { "tray-stop-recording" } else { "tray-start-recording" }
+            for (shortcut, name) in shortcuts_list {
+                let app_handle_clone = app_handle.clone();
+                let name_owned = name.to_string();
+                app.global_shortcut().on_shortcut(shortcut, move |_app_handle, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        match name_owned.as_str() {
+                            "start-stop" => {
+                                let is_recording = {
+                                    let state = RECORDING_STATE.lock().unwrap();
+                                    state.is_recording
+                                };
+                                let event_name = if is_recording { "tray-stop-recording" } else { "tray-start-recording" };
+                                let _ = app_handle_clone.emit(event_name, ());
+                            }
+                            "pause-resume" => {
+                                let _ = app_handle_clone.emit("tray-pause-recording", ());
+                            }
+                            "stop" => {
+                                let _ = app_handle_clone.emit("tray-stop-recording", ());
+                            }
+                            "screenshot" => {
+                                let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                                let _ = Command::new("screencapture")
+                                    .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", ts)])
+                                    .spawn();
+                            }
+                            "toggle-toolbar" => {
+                                let _ = app_handle_clone.emit("toggle-toolbar", ());
+                            }
+                            _ => {}
                         }
-                        "global-pause-resume" => "tray-pause-recording",
-                        "global-stop" => "tray-stop-recording",
-                        "global-screenshot" => {
-                            let _ = Command::new("screencapture")
-                                .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs())])
-                                .spawn();
-                            return;
-                        }
-                        "global-toggle-toolbar" => {
-                            let _ = app_handle.emit("toggle-toolbar", ());
-                            return;
-                        }
-                        _ => return,
-                    };
-                    let _ = app_handle.emit(id, ());
-                }
-            }).expect("Failed to register global shortcuts");
+                    }
+                }).expect("Failed to register shortcut");
+            }
 
             Ok(())
         })
