@@ -69,9 +69,12 @@ export default function FloatingToolbar({
     { id: "pen", icon: "pen", label: "Draw" },
     { id: "highlighter", icon: "highlighter", label: "Highlight" },
     { id: "arrow", icon: "arrow", label: "Arrow" },
+    { id: "line", icon: "line", label: "Line" },
     { id: "rectangle", icon: "rectangle", label: "Rectangle" },
     { id: "circle", icon: "circle", label: "Circle" },
     { id: "text", icon: "text", label: "Text" },
+    { id: "blur", icon: "blur", label: "Blur" },
+    { id: "pixelate", icon: "pixelate", label: "Pixelate" },
   ];
 
   return (

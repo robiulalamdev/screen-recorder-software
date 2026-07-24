@@ -1,4 +1,4 @@
-type ErrorType = "no-microphone" | "disk-full" | "permission-denied" | "recording-failed" | "encoder-unavailable" | "camera-not-found";
+type ErrorType = "no-microphone" | "disk-full" | "permission-denied" | "recording-failed" | "encoder-unavailable" | "camera-not-found" | "ffmpeg-not-found";
 
 interface ErrorNotificationProps {
   type: ErrorType;
@@ -36,6 +36,11 @@ const errorConfig: Record<ErrorType, { title: string; message: string; icon: str
     title: "Camera Not Found",
     message: "No camera detected. Please connect a camera to use this feature.",
     icon: "camera",
+  },
+  "ffmpeg-not-found": {
+    title: "FFmpeg Not Installed",
+    message: "FFmpeg is required for screen recording. Install it with: brew install ffmpeg",
+    icon: "settings",
   },
 };
 

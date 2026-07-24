@@ -33,8 +33,8 @@ function TabIcon({ icon }: { icon: string }) {
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button onClick={() => onChange(!enabled)} className={`w-10 h-5.5 rounded-full p-0.5 transition-colors ${enabled ? "bg-purple-500" : "bg-zinc-700"}`}>
-      <div className={`w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0"}`} />
+    <button onClick={() => onChange(!enabled)} className={`w-10 h-[22px] rounded-full p-0.5 transition-colors ${enabled ? "bg-purple-500" : "bg-zinc-700"}`}>
+      <div className={`w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-0"}`} />
     </button>
   );
 }
@@ -57,8 +57,24 @@ function GeneralSettings() {
             }}
             className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors"
           >Change</button>
-          <button className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors">Open</button>
         </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium mb-3">Video Name Format</h3>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-400 font-mono">
+            {settings.videoNameFormat}
+          </div>
+          <button
+            onClick={() => {
+              const fmt = prompt("Enter name format:", settings.videoNameFormat);
+              if (fmt) updateSettings({ videoNameFormat: fmt });
+            }}
+            className="px-3 py-2 rounded-lg bg-[#16162a] border border-[#1e1e2e] text-sm text-zinc-300 hover:text-white transition-colors"
+          >Change</button>
+        </div>
+        <p className="text-[11px] text-zinc-500 mt-1.5">Available: {"{YYYY}"} {"{MM}"} {"{DD}"} {"{HH}"} {"{mm}"} {"{ss}"}</p>
       </div>
 
       <div className="space-y-4">
@@ -77,6 +93,10 @@ function GeneralSettings() {
         <div className="flex items-center justify-between">
           <span className="text-sm text-zinc-300">Launch on startup</span>
           <Toggle enabled={settings.launchOnStartup} onChange={(v) => updateSettings({ launchOnStartup: v })} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-zinc-300">Start minimized</span>
+          <Toggle enabled={settings.startMinimized} onChange={(v) => updateSettings({ startMinimized: v })} />
         </div>
       </div>
 
@@ -174,6 +194,10 @@ function RecordingSettings() {
           ))}
         </div>
       </div>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-zinc-300">Enable Countdown</span>
+        <Toggle enabled={settings.countdownEnabled} onChange={(v) => updateSettings({ countdownEnabled: v })} />
+      </div>
     </div>
   );
 }
@@ -187,27 +211,41 @@ function AudioSettings() {
         <h3 className="text-sm font-medium mb-3">Microphone</h3>
         <select value={settings.microphone} onChange={(e) => updateSettings({ microphone: e.target.value })}
           className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
-          <option>Default</option><option>USB Microphone</option><option>Bluetooth Microphone</option>
+          <option>Default</option><option>USB Microphone</option><option>Bluetooth Microphone</option><option>Muted</option>
         </select>
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">System Audio</h3>
         <select value={settings.systemAudio} onChange={(e) => updateSettings({ systemAudio: e.target.value })}
           className="w-full px-3 py-2 rounded-lg bg-[#0d0d14] border border-[#1e1e2e] text-sm text-zinc-300 outline-none">
-          <option>Default</option><option>Headphones</option><option>Speakers</option>
+          <option>Default</option><option>Headphones</option><option>Speakers</option><option>Muted</option>
         </select>
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">Microphone Volume</h3>
-        <input type="range" min="0" max="100" value={settings.micVolume}
-          onChange={(e) => updateSettings({ micVolume: Number(e.target.value) })}
-          className="w-full accent-purple-500" />
+        <div className="flex items-center gap-3">
+          <input type="range" min="0" max="100" value={settings.micVolume}
+            onChange={(e) => updateSettings({ micVolume: Number(e.target.value) })}
+            className="flex-1 accent-purple-500" />
+          <span className="text-xs text-zinc-400 w-8 text-right">{settings.micVolume}%</span>
+        </div>
       </div>
       <div>
         <h3 className="text-sm font-medium mb-3">System Audio Volume</h3>
-        <input type="range" min="0" max="100" value={settings.systemVolume}
-          onChange={(e) => updateSettings({ systemVolume: Number(e.target.value) })}
-          className="w-full accent-purple-500" />
+        <div className="flex items-center gap-3">
+          <input type="range" min="0" max="100" value={settings.systemVolume}
+            onChange={(e) => updateSettings({ systemVolume: Number(e.target.value) })}
+            className="flex-1 accent-purple-500" />
+          <span className="text-xs text-zinc-400 w-8 text-right">{settings.systemVolume}%</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-zinc-300">Noise Suppression</span>
+        <Toggle enabled={settings.noiseSuppression} onChange={(v) => updateSettings({ noiseSuppression: v })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-zinc-300">Echo Cancellation</span>
+        <Toggle enabled={settings.echoCancellation} onChange={(v) => updateSettings({ echoCancellation: v })} />
       </div>
     </div>
   );
@@ -254,6 +292,11 @@ function ShortcutsSettings() {
 
 export default function Settings({ activeTab }: SettingsProps) {
   const [currentTab, setCurrentTab] = useState(activeTab);
+
+  // Sync with external tab changes
+  if (currentTab !== activeTab) {
+    setCurrentTab(activeTab);
+  }
 
   const renderContent = () => {
     switch (currentTab) {

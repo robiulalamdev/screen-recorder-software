@@ -7,6 +7,8 @@ export interface AppSettings {
   autoOpenFolder: boolean;
   minimizeToTray: boolean;
   launchOnStartup: boolean;
+  startMinimized: boolean;
+  videoNameFormat: string;
   theme: "dark" | "light" | "system";
   language: string;
 
@@ -16,12 +18,15 @@ export interface AppSettings {
   resolution: "original" | "1080p" | "1440p" | "4k";
   encoder: "h264" | "h265" | "av1";
   outputFormat: "mp4" | "webm" | "mkv";
+  countdownEnabled: boolean;
 
   // Audio
   microphone: string;
   systemAudio: string;
   micVolume: number;
   systemVolume: number;
+  noiseSuppression: boolean;
+  echoCancellation: boolean;
 
   // Shortcuts
   shortcuts: {
@@ -40,6 +45,8 @@ const defaultSettings: AppSettings = {
   autoOpenFolder: false,
   minimizeToTray: true,
   launchOnStartup: false,
+  startMinimized: false,
+  videoNameFormat: "Recording_{YYYY}-{MM}-{DD}_{HH}-{mm}-{ss}",
   theme: "dark",
   language: "English",
   videoQuality: "high",
@@ -47,10 +54,13 @@ const defaultSettings: AppSettings = {
   resolution: "original",
   encoder: "h264",
   outputFormat: "mp4",
+  countdownEnabled: true,
   microphone: "Default",
   systemAudio: "Default",
   micVolume: 80,
   systemVolume: 70,
+  noiseSuppression: false,
+  echoCancellation: false,
   shortcuts: {
     startStop: "Ctrl + Shift + R",
     pauseResume: "Ctrl + Shift + P",

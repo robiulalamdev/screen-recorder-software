@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 
-export type DrawTool = "pen" | "highlighter" | "arrow" | "rectangle" | "circle" | "text";
+export type DrawTool = "pen" | "highlighter" | "arrow" | "rectangle" | "circle" | "text" | "line" | "blur" | "pixelate";
 
 interface Point {
   x: number;
@@ -30,8 +30,6 @@ export default function CanvasDrawing({
   tool,
   color,
   brushSize,
-  onUndo,
-  onRedo,
 }: CanvasDrawingProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -46,6 +44,77 @@ export default function CanvasDrawing({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
+  }, []);
+
+  const applyBlur = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, intensity: number) => {
+    const imageData = ctx.getImageData(x, y, w, h);
+    const data = imageData.data;
+    const radius = Math.max(1, Math.floor(intensity / 3));
+
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        let r = 0, g = 0, b = 0, a = 0, count = 0;
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const nx = px + dx;
+            const ny = py + dy;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+              const idx = (ny * w + nx) * 4;
+              r += data[idx];
+              g += data[idx + 1];
+              b += data[idx + 2];
+              a += data[idx + 3];
+              count++;
+            }
+          }
+        }
+        const idx = (py * w + px) * 4;
+        data[idx] = r / count;
+        data[idx + 1] = g / count;
+        data[idx + 2] = b / count;
+        data[idx + 3] = a / count;
+      }
+    }
+    ctx.putImageData(imageData, x, y);
+  }, []);
+
+  const applyPixelate = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, intensity: number) => {
+    const blockSize = Math.max(2, Math.floor(intensity / 2));
+    const imageData = ctx.getImageData(x, y, w, h);
+    const data = imageData.data;
+
+    for (let py = 0; py < h; py += blockSize) {
+      for (let px = 0; px < w; px += blockSize) {
+        let r = 0, g = 0, b = 0, a = 0, count = 0;
+
+        for (let dy = 0; dy < blockSize && py + dy < h; dy++) {
+          for (let dx = 0; dx < blockSize && px + dx < w; dx++) {
+            const idx = ((py + dy) * w + (px + dx)) * 4;
+            r += data[idx];
+            g += data[idx + 1];
+            b += data[idx + 2];
+            a += data[idx + 3];
+            count++;
+          }
+        }
+
+        r = Math.round(r / count);
+        g = Math.round(g / count);
+        b = Math.round(b / count);
+        a = Math.round(a / count);
+
+        for (let dy = 0; dy < blockSize && py + dy < h; dy++) {
+          for (let dx = 0; dx < blockSize && px + dx < w; dx++) {
+            const idx = ((py + dy) * w + (px + dx)) * 4;
+            data[idx] = r;
+            data[idx + 1] = g;
+            data[idx + 2] = b;
+            data[idx + 3] = a;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imageData, x, y);
   }, []);
 
   const redraw = useCallback(() => {
@@ -73,6 +142,16 @@ export default function CanvasDrawing({
           for (let i = 1; i < stroke.points.length; i++) {
             ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
           }
+          ctx.stroke();
+          break;
+        }
+        case "line": {
+          if (stroke.points.length < 1 || !stroke.endPoint) break;
+          const start = stroke.points[0];
+          const end = stroke.endPoint;
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(end.x, end.y);
           ctx.stroke();
           break;
         }
@@ -129,13 +208,39 @@ export default function CanvasDrawing({
           ctx.fillText(stroke.text, stroke.points[0].x, stroke.points[0].y);
           break;
         }
+        case "blur": {
+          if (stroke.points.length < 1 || !stroke.endPoint) break;
+          const s = stroke.points[0];
+          const e = stroke.endPoint;
+          const bx = Math.min(s.x, e.x);
+          const by = Math.min(s.y, e.y);
+          const bw = Math.abs(e.x - s.x);
+          const bh = Math.abs(e.y - s.y);
+          if (bw > 0 && bh > 0) {
+            applyBlur(ctx, bx, by, bw, bh, stroke.size * 5);
+          }
+          break;
+        }
+        case "pixelate": {
+          if (stroke.points.length < 1 || !stroke.endPoint) break;
+          const s = stroke.points[0];
+          const e = stroke.endPoint;
+          const px = Math.min(s.x, e.x);
+          const py = Math.min(s.y, e.y);
+          const pw = Math.abs(e.x - s.x);
+          const ph = Math.abs(e.y - s.y);
+          if (pw > 0 && ph > 0) {
+            applyPixelate(ctx, px, py, pw, ph, stroke.size * 5);
+          }
+          break;
+        }
       }
       ctx.globalAlpha = 1;
     };
 
     strokes.forEach(drawStroke);
     if (currentStroke) drawStroke(currentStroke);
-  }, [strokes, currentStroke]);
+  }, [strokes, currentStroke, applyBlur, applyPixelate]);
 
   useEffect(() => {
     redraw();
@@ -145,13 +250,26 @@ export default function CanvasDrawing({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
-        if (e.shiftKey) onRedo();
-        else onUndo();
+        if (e.shiftKey) {
+          // redo
+          if (redoStack.length > 0) {
+            const last = redoStack[redoStack.length - 1];
+            setRedoStack((prev) => prev.slice(0, -1));
+            setStrokes((prev) => [...prev, last]);
+          }
+        } else {
+          // undo
+          if (strokes.length > 0) {
+            const last = strokes[strokes.length - 1];
+            setStrokes((prev) => prev.slice(0, -1));
+            setRedoStack((prev) => [...prev, last]);
+          }
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onUndo, onRedo]);
+  }, [strokes, redoStack]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -205,30 +323,6 @@ export default function CanvasDrawing({
     setCurrentStroke(null);
     setIsDrawing(false);
   }, [isDrawing, currentStroke]);
-
-  const handleUndoLocal = useCallback(() => {
-    if (strokes.length === 0) return;
-    const last = strokes[strokes.length - 1];
-    setStrokes((prev) => prev.slice(0, -1));
-    setRedoStack((prev) => [...prev, last]);
-    onUndo();
-  }, [strokes, onUndo]);
-
-  const handleRedoLocal = useCallback(() => {
-    if (redoStack.length === 0) return;
-    const last = redoStack[redoStack.length - 1];
-    setRedoStack((prev) => prev.slice(0, -1));
-    setStrokes((prev) => [...prev, last]);
-    onRedo();
-  }, [redoStack, onRedo]);
-
-  // Expose undo/redo to parent
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    w.__canvasUndo = handleUndoLocal;
-    w.__canvasRedo = handleRedoLocal;
-  }, [handleUndoLocal, handleRedoLocal]);
 
   return (
     <canvas
