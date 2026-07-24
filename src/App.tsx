@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import ThemeProvider from "./components/ThemeProvider";
 import Sidebar from "./components/Sidebar";
@@ -31,10 +30,7 @@ function MainWindow() {
   const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
   const [error, setError] = useState<{ type: ErrorType; message?: string } | null>(null);
   const [savedRecording, setSavedRecording] = useState<{
-    fileName: string;
-    fileSize: string;
-    duration: string;
-    filePath: string;
+    fileName: string; fileSize: string; duration: string; filePath: string;
   } | null>(null);
   const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
@@ -48,22 +44,15 @@ function MainWindow() {
   const { settings } = useSettings();
   const { addRecording } = useRecordings();
 
-  useEffect(() => {
-    recordingStateRef.current = recordingState;
-  }, [recordingState]);
+  useEffect(() => { recordingStateRef.current = recordingState; }, [recordingState]);
 
   const handleStopRecording = useCallback(async () => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
 
-    try {
-      await invoke("stop_recording");
-    } catch {}
+    try { await invoke("stop_recording"); } catch {}
     await new Promise((r) => setTimeout(r, 2000));
-
-    try {
-      await invoke("restore_main_window");
-    } catch {}
+    try { await invoke("close_toolbar_window"); } catch {}
 
     const duration = Date.now() - recordingStartTimeRef.current;
     const totalSeconds = Math.floor(duration / 1000);
@@ -78,8 +67,7 @@ function MainWindow() {
     let fileSize = "N/A";
     try {
       const sizeBytes = await invoke<number>("get_file_size", { path: filePath });
-      if (sizeBytes > 1048576) fileSize = `${(sizeBytes / 1048576).toFixed(1)} MB`;
-      else fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
+      fileSize = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(1)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
     } catch {}
 
     addRecording({
@@ -94,12 +82,8 @@ function MainWindow() {
     setRecordingState("saved");
     isStoppingRef.current = false;
 
-    try {
-      await invoke("show_notification", { title: "Recording Saved", body: `${fileName} has been saved.` });
-    } catch {}
-    if (filePath) {
-      try { await invoke("open_file", { path: filePath }); } catch {}
-    }
+    try { await invoke("show_notification", { title: "Recording Saved", body: `${fileName} has been saved.` }); } catch {}
+    if (filePath) { try { await invoke("open_file", { path: filePath }); } catch {} }
   }, [settings, addRecording]);
 
   useEffect(() => {
@@ -108,7 +92,6 @@ function MainWindow() {
     const unlistenTrayStart = listen("tray-start-recording", () => { if (recordingStateRef.current === "idle") handleStartRecording(); });
     const unlistenTrayStop = listen("tray-stop-recording", () => { const s = recordingStateRef.current; if (s === "recording" || s === "paused") handleStopRecording(); });
     const unlistenTrayPause = listen("tray-pause-recording", () => setRecordingState((prev) => (prev === "recording" ? "paused" : "recording")));
-
     return () => {
       unlistenStop.then((fn) => fn());
       unlistenPause.then((fn) => fn());
@@ -137,12 +120,7 @@ function MainWindow() {
       const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) { setError({ type: "disk-full" }); return; }
 
-      // Go fullscreen so selection overlay covers the ENTIRE screen
-      const win = getCurrentWindow();
-      await win.setFullscreen(true);
-      await new Promise((r) => setTimeout(r, 500));
-
-      // Capture screenshot of the fullscreen screen
+      // Capture screenshot of the screen — app stays at normal size
       try {
         const path = await invoke<string>("capture_screen");
         setScreenshotPath(path);
@@ -157,10 +135,9 @@ function MainWindow() {
   const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
-    // Exit fullscreen first, then start countdown
-    const win = getCurrentWindow();
-    await win.setFullscreen(false);
-    await new Promise((r) => setTimeout(r, 300));
+    setRecordingState("selecting"); // back to idle briefly
+    await new Promise((r) => setTimeout(r, 100));
+
     if (settings.countdownEnabled) {
       setRecordingState("countdown");
     } else {
@@ -171,6 +148,10 @@ function MainWindow() {
   const handleCountdownComplete = useCallback(async () => {
     recordingStartTimeRef.current = Date.now();
     setRecordingState("recording");
+
+    // Create toolbar window and hide main window
+    try { await invoke("create_toolbar_window"); } catch {}
+
     try {
       const filePath = await invoke<string>("start_recording", {
         options: {
@@ -186,7 +167,7 @@ function MainWindow() {
       actualFilePathRef.current = filePath;
     } catch (err) {
       setError({ type: "recording-failed", message: String(err) });
-      await invoke("restore_main_window");
+      try { await invoke("close_toolbar_window"); } catch {}
       setRecordingState("idle");
     }
   }, [settings, captureMode, captureBounds]);
@@ -209,22 +190,18 @@ function MainWindow() {
     }
   };
 
-  const isRecording = recordingState === "recording" || recordingState === "paused";
-
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}>
-      <div className="flex flex-1 min-h-0">
-        {!isRecording && <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />}
-        <main className="flex-1 overflow-y-auto">{renderPage()}</main>
-      </div>
+    <div className="min-h-screen flex" style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}>
+      {/* Sidebar — ALWAYS visible */}
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+      <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
+      {/* Selection overlay — shows within app window with screenshot background */}
       {recordingState === "selecting" && (
         <SelectionOverlay
           screenshotPath={screenshotPath}
           onCapture={handleCapture}
           onCancel={async () => {
-            const win = getCurrentWindow();
-            await win.unminimize();
             setRecordingState("idle");
             setScreenshotPath(null);
           }}
@@ -234,7 +211,7 @@ function MainWindow() {
       {recordingState === "countdown" && <Countdown onComplete={handleCountdownComplete} />}
 
       <CameraOverlay
-        visible={isRecording && cameraVisible}
+        visible={(recordingState === "recording" || recordingState === "paused") && cameraVisible}
         shape={cameraShape}
         onShapeChange={setCameraShape}
         onToggle={() => setCameraVisible((v) => !v)}
@@ -242,9 +219,7 @@ function MainWindow() {
 
       {recordingState === "saved" && savedRecording && (
         <RecordingSuccess
-          fileName={savedRecording.fileName}
-          fileSize={savedRecording.fileSize}
-          duration={savedRecording.duration}
+          fileName={savedRecording.fileName} fileSize={savedRecording.fileSize} duration={savedRecording.duration}
           onOpenFile={async () => { try { await invoke("open_file", { path: savedRecording.filePath }); } catch {} handleDismissSaved(); }}
           onOpenFolder={async () => { try { await invoke("open_folder", { path: settings.saveLocation }); } catch {} handleDismissSaved(); }}
           onCopyPath={() => { navigator.clipboard?.writeText(savedRecording.filePath); handleDismissSaved(); }}
@@ -255,8 +230,7 @@ function MainWindow() {
 
       {error && (
         <ErrorNotification
-          type={error.type}
-          onDismiss={() => setError(null)}
+          type={error.type} onDismiss={() => setError(null)}
           onOpenSettings={error.type === "permission-denied" || error.type === "ffmpeg-not-found" ? () => { setError(null); handleNavigate("settings", "general"); } : undefined}
         />
       )}
@@ -266,7 +240,6 @@ function MainWindow() {
 
 function App() {
   const isToolbar = window.location.hash === "#toolbar";
-
   return (
     <ThemeProvider>
       {isToolbar ? <ToolbarWindow /> : <MainWindow />}
