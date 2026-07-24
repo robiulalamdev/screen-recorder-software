@@ -25,10 +25,15 @@ export default function CameraOverlay({
   const posStart = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
+    let cancelled = false;
     if (visible && !stream) {
       navigator.mediaDevices
         .getUserMedia({ video: { width: 640, height: 480 } })
         .then((s) => {
+          if (cancelled) {
+            s.getTracks().forEach((t) => t.stop());
+            return;
+          }
           setStream(s);
           if (videoRef.current) videoRef.current.srcObject = s;
         })
@@ -37,7 +42,8 @@ export default function CameraOverlay({
         });
     }
     return () => {
-      if (stream) {
+      cancelled = true;
+      if (stream && !visible) {
         stream.getTracks().forEach((t) => t.stop());
         setStream(null);
       }

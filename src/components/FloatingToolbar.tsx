@@ -125,7 +125,7 @@ export default function FloatingToolbar({
         ref={toolbarRef}
         data-tauri-drag-region
         className="fixed z-50 bg-[#1a1a2e] border border-[#2a2a3e] rounded-2xl px-3 py-2.5 shadow-2xl flex items-center gap-1"
-        style={{ left: 0, right: 0, top: 8, bottom: 0, justifyContent: "center", alignItems: "center" }}
+        style={{ left: 0, right: 0, top: 8, justifyContent: "center", alignItems: "center" }}
       >
         {/* More options */}
         <button className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
