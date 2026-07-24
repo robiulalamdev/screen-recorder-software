@@ -1,16 +1,12 @@
 @import "tailwindcss";
 
-/* ==============================
-   THEME CSS VARIABLES
-   ============================== */
-
+/* Dark theme (default) */
 :root, .dark {
   --bg-primary: #0d0d14;
   --bg-secondary: #13131f;
   --bg-tertiary: #16162a;
   --bg-elevated: #1a1a2e;
   --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(139, 92, 246, 0.15);
   --border-primary: #1e1e2e;
   --border-secondary: #2a2a3e;
   --border-accent: rgba(139, 92, 246, 0.3);
@@ -30,13 +26,13 @@
   color-scheme: dark;
 }
 
+/* Light theme */
 .light {
   --bg-primary: #f8f9fc;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f1f3f9;
   --bg-elevated: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.04);
-  --bg-active: rgba(139, 92, 246, 0.1);
   --border-primary: #e2e5ee;
   --border-secondary: #d1d5e0;
   --border-accent: rgba(139, 92, 246, 0.35);
@@ -61,6 +57,4 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-
-/* Selection styling */
 ::selection { background: rgba(139, 92, 246, 0.3); }

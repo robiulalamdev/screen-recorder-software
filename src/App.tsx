@@ -11,9 +11,7 @@ import ShortcutsPage from "./pages/ShortcutsPage";
 import About from "./pages/About";
 import SelectionOverlay from "./components/SelectionOverlay";
 import Countdown from "./components/Countdown";
-import FloatingToolbar from "./components/FloatingToolbar";
-import CanvasDrawing from "./components/CanvasDrawing";
-import type { DrawTool } from "./components/CanvasDrawing";
+import ToolbarWindow from "./components/ToolbarWindow";
 import RecordingSuccess from "./components/RecordingSuccess";
 import CameraOverlay from "./components/CameraOverlay";
 import ErrorNotification from "./components/ErrorNotification";
@@ -41,9 +39,6 @@ function MainWindow() {
   const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
   const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
-  const [activeDrawTool, setActiveDrawTool] = useState<DrawTool | null>(null);
-  const [drawColor, setDrawColor] = useState("#ef4444");
-  const [brushSize, setBrushSize] = useState(4);
 
   const recordingStartTimeRef = useRef<number>(0);
   const actualFilePathRef = useRef<string | null>(null);
@@ -96,7 +91,6 @@ function MainWindow() {
 
     setSavedRecording({ fileName, fileSize, duration: durationStr, filePath });
     setCameraVisible(false);
-    setActiveDrawTool(null);
     setRecordingState("saved");
     isStoppingRef.current = false;
 
@@ -204,10 +198,6 @@ function MainWindow() {
     setScreenshotPath(null);
   }, []);
 
-  const handleTogglePause = useCallback(() => {
-    setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
-  }, []);
-
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <Dashboard onNavigate={handleNavigate} onStartRecording={handleStartRecording} />;
@@ -223,31 +213,10 @@ function MainWindow() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}>
-      {isRecording && (
-        <div className="shrink-0">
-          <FloatingToolbar
-            isPaused={recordingState === "paused"}
-            onTogglePause={handleTogglePause}
-            onStop={handleStopRecording}
-            cameraVisible={cameraVisible}
-            onCameraToggle={() => setCameraVisible((v) => !v)}
-            activeTool={activeDrawTool}
-            onToolSelect={(t) => setActiveDrawTool(t as DrawTool | null)}
-            drawColor={drawColor}
-            onColorChange={setDrawColor}
-            brushSize={brushSize}
-            onBrushSizeChange={setBrushSize}
-          />
-        </div>
-      )}
       <div className="flex flex-1 min-h-0">
         {!isRecording && <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />}
         <main className="flex-1 overflow-y-auto">{renderPage()}</main>
       </div>
-
-      {isRecording && (
-        <CanvasDrawing tool={activeDrawTool} color={drawColor} brushSize={brushSize} />
-      )}
 
       {recordingState === "selecting" && (
         <SelectionOverlay
@@ -296,9 +265,11 @@ function MainWindow() {
 }
 
 function App() {
+  const isToolbar = window.location.hash === "#toolbar";
+
   return (
     <ThemeProvider>
-      <MainWindow />
+      {isToolbar ? <ToolbarWindow /> : <MainWindow />}
     </ThemeProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTheme } from "next-themes";
 import { useSettings } from "../stores/settingsStore";
 
 interface SettingsProps { activeTab: string; }
@@ -32,6 +33,7 @@ const btnStyle = (active: boolean) => ({
 
 function GeneralSettings() {
   const { settings, updateSettings } = useSettings();
+  const { setTheme } = useTheme();
   return (
     <div className="space-y-6">
       <div>
@@ -61,7 +63,7 @@ function GeneralSettings() {
         <h3 className="text-sm font-medium mb-3" style={{ color: "var(--text-primary)" }}>Theme</h3>
         <div className="flex gap-2">
           {(["dark", "light", "system"] as const).map((t) => (
-            <button key={t} onClick={() => updateSettings({ theme: t })} className={optionBtnCls} style={btnStyle(settings.theme === t)}>
+            <button key={t} onClick={() => { updateSettings({ theme: t }); setTheme(t); }} className={optionBtnCls} style={btnStyle(settings.theme === t)}>
               {t === "dark" && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: "var(--accent-text)" }} />}
               {t}
             </button>

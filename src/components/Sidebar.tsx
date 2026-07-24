@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
 import type React from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
@@ -43,32 +41,17 @@ const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   )},
 ];
 
-const COLLAPSE_WIDTH = 800;
-
 export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(() => window.innerWidth < COLLAPSE_WIDTH);
-
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth < COLLAPSE_WIDTH) setCollapsed(true);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  const sidebarWidth = collapsed ? "64px" : "220px";
-
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
     <aside
       className="shrink-0 flex flex-col"
       style={{
-        width: sidebarWidth,
+        width: "200px",
         backgroundColor: "var(--bg-secondary)",
         borderRight: "1px solid var(--border-primary)",
         height: "100vh",
-        transition: "width 0.2s ease",
-        overflow: "hidden",
+        position: "sticky",
+        top: 0,
       }}
     >
       {/* Logo */}
@@ -79,27 +62,23 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5" /></svg>
         </div>
-        {!collapsed && (
-          <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>ScreenRecorder</span>
-        )}
+        <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>ScreenRecorder</span>
       </div>
 
-      {/* Navigation */}
-      <nav style={{ flex: 1, padding: collapsed ? "8px 6px" : "0 12px" }}>
+      {/* Navigation — flex-1 pushes bottom items down */}
+      <nav style={{ flex: 1, padding: "0 12px" }}>
         {navItems.map((item) => {
           const isActive = currentPage === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              title={collapsed ? item.label : undefined}
               style={{
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: collapsed ? "center" : "flex-start",
                 gap: "12px",
-                padding: collapsed ? "10px 0" : "10px 12px",
+                padding: "10px 12px",
                 borderRadius: "8px",
                 fontSize: "14px",
                 fontWeight: 500,
@@ -108,125 +87,36 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                 cursor: "pointer",
                 backgroundColor: isActive ? "var(--accent-bg)" : "transparent",
                 color: isActive ? "var(--accent-text)" : "var(--text-muted)",
-                textAlign: collapsed ? "center" : "left",
+                textAlign: "left",
                 transition: "all 0.15s",
               }}
             >
               <span style={{ color: isActive ? "var(--accent-text)" : "var(--text-muted)", flexShrink: 0 }}>
                 {item.icon}
               </span>
-              {!collapsed && item.label}
+              {item.label}
             </button>
           );
         })}
       </nav>
 
-      {/* Go Premium — only when expanded */}
-      {!collapsed && (
-        <div
-          style={{
-            margin: "0 12px 12px",
-            padding: "12px",
-            borderRadius: "12px",
-            backgroundColor: "var(--accent-bg)",
-            border: "1px solid var(--accent-border)",
-          }}
-        >
-          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
-          <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
-          <button
-            className="bg-purple-500 hover:bg-purple-600"
-            style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "pointer" }}
-          >
-            Upgrade
-          </button>
-        </div>
-      )}
-
-      {/* User */}
-      <div style={{ padding: collapsed ? "0 6px 12px" : "0 12px 12px", display: "flex", alignItems: "center", gap: "12px", justifyContent: collapsed ? "center" : "flex-start" }}>
-        <div
-          style={{
-            width: "32px", height: "32px", borderRadius: "50%",
-            backgroundColor: "var(--bg-tertiary)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0,
-          }}
-        >MR</div>
-        {!collapsed && (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Md. Robiul Alam
-            </p>
-            <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
-          </div>
-        )}
+      {/* Go Premium */}
+      <div style={{ margin: "0 12px 12px", padding: "12px", borderRadius: "12px", backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)" }}>
+        <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
+        <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
+        <button className="bg-purple-500 hover:bg-purple-600" style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "pointer" }}>
+          Upgrade
+        </button>
       </div>
 
-      {/* Minimize */}
-      <button
-        onClick={() => getCurrentWindow().minimize()}
-        style={{
-          margin: collapsed ? "0 6px 12px" : "0 12px 12px",
-          padding: "8px",
-          borderRadius: "8px",
-          border: "1px solid var(--border-primary)",
-          backgroundColor: "transparent",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--text-muted)",
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-          <path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-        </svg>
-      </button>
+      {/* User */}
+      <div style={{ padding: "0 12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0 }}>MR</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Md. Robiul Alam</p>
+          <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
+        </div>
+      </div>
     </aside>
-
-    {/* Toggle button — on the border, vertically centered */}
-    <button
-      onClick={() => setCollapsed(!collapsed)}
-      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      className="sidebar-toggle"
-      style={{
-        position: "absolute",
-        right: "-16px",
-        top: "50%",
-        transform: "translateY(-50%)",
-        width: "32px",
-        height: "32px",
-        borderRadius: "50%",
-        border: "2px solid var(--border-secondary)",
-        backgroundColor: "var(--bg-secondary)",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "var(--text-muted)",
-        zIndex: 10,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
-        transition: "all 0.2s ease",
-        outline: "2px solid var(--bg-primary)",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = "var(--accent-bg)";
-        e.currentTarget.style.borderColor = "var(--accent-border)";
-        e.currentTarget.style.color = "var(--accent-text)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "var(--bg-secondary)";
-        e.currentTarget.style.borderColor = "var(--border-secondary)";
-        e.currentTarget.style.color = "var(--text-muted)";
-      }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-        style={{ transition: "transform 0.25s ease", transform: collapsed ? "rotate(180deg)" : "rotate(0deg)" }}>
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-    </button>
-    </div>
   );
 }

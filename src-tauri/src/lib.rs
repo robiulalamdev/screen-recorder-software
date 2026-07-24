@@ -46,9 +46,44 @@ static RECORDING_STATE: Mutex<RecordingState> = Mutex::new(RecordingState {
 
 #[tauri::command]
 fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    // Minimize main window during recording so it's not captured
+    use tauri::WebviewUrl;
+
+    // Remove existing toolbar window if any
+    if let Some(existing) = app.get_webview_window("toolbar") {
+        let _ = existing.close();
+    }
+
+    // Get screen size for positioning
+    let monitor_size = app.get_webview_window("main")
+        .and_then(|w| w.primary_monitor().ok())
+        .flatten()
+        .map(|m| (m.size().width, m.size().height))
+        .unwrap_or((1920, 1080));
+
+    let toolbar_width = 650u32;
+    let toolbar_height = 56u32;
+    let x = (monitor_size.0 - toolbar_width) / 2;
+    let y = 50u32;
+
+    let _window = WebviewWindowBuilder::new(
+        &app,
+        "toolbar",
+        WebviewUrl::App("/#toolbar".into()),
+    )
+    .title("Recording Toolbar")
+    .inner_size(toolbar_width as f64, toolbar_height as f64)
+    .position(x as f64, y as f64)
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .transparent(false)
+    .build()
+    .map_err(|e| format!("Failed to create toolbar window: {}", e))?;
+
+    // Hide main window
     if let Some(main_window) = app.get_webview_window("main") {
-        let _ = main_window.set_skip_taskbar(true);
+        let _ = main_window.hide();
     }
 
     Ok(())
@@ -56,9 +91,17 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn close_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(main_window) = app.get_webview_window("main") {
-        let _ = main_window.set_skip_taskbar(false);
+    // Close toolbar window
+    if let Some(toolbar) = app.get_webview_window("toolbar") {
+        let _ = toolbar.close();
     }
+
+    // Show main window again
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.set_focus();
+    }
+
     Ok(())
 }
 
