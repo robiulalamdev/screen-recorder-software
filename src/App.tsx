@@ -143,7 +143,12 @@ function MainWindow() {
       const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) { setError({ type: "disk-full" }); return; }
 
-      // Capture screenshot of screen (app stays visible so overlay renders)
+      // Go fullscreen so selection overlay covers the ENTIRE screen
+      const win = getCurrentWindow();
+      await win.setFullscreen(true);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Capture screenshot of the fullscreen screen
       try {
         const path = await invoke<string>("capture_screen");
         setScreenshotPath(path);
@@ -158,9 +163,9 @@ function MainWindow() {
   const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
-    // Minimize app so it's not in the recording
+    // Exit fullscreen first, then start countdown
     const win = getCurrentWindow();
-    await win.minimize();
+    await win.setFullscreen(false);
     await new Promise((r) => setTimeout(r, 300));
     if (settings.countdownEnabled) {
       setRecordingState("countdown");
