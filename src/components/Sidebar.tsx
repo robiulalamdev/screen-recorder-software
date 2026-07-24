@@ -1,3 +1,5 @@
+import type React from "react";
+
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
 interface SidebarProps {
@@ -13,7 +15,7 @@ const navItems: { id: Page; label: string; icon: string }[] = [
   { id: "about", label: "About", icon: "about" },
 ];
 
-const iconMap: Record<string, ReactNode> = {
+const iconMap: Record<string, React.ReactNode> = {
   dashboard: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7" rx="1" />

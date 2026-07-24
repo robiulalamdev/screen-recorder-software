@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
@@ -21,7 +21,6 @@ type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused
 type CameraShape = "circle" | "rounded" | "square";
 type ErrorType = "no-microphone" | "disk-full" | "permission-denied" | "recording-failed" | "encoder-unavailable" | "camera-not-found" | "ffmpeg-not-found";
 
-// Main Window - renders the full application
 function MainWindow() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [settingsTab, setSettingsTab] = useState("general");
@@ -35,15 +34,90 @@ function MainWindow() {
     duration: string;
     filePath: string;
   } | null>(null);
-  const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
-  const [actualFilePath, setActualFilePath] = useState<string | null>(null);
   const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
+
+  // Use refs for values that event listeners need — avoids stale closures
+  const recordingStartTimeRef = useRef<number>(0);
+  const actualFilePathRef = useRef<string | null>(null);
+  const recordingStateRef = useRef<RecordingState>("idle");
+  const isStoppingRef = useRef(false);
 
   const { settings } = useSettings();
   const { addRecording } = useRecordings();
 
-  // Listen for events from toolbar window
+  // Keep recordingState ref in sync
+  useEffect(() => {
+    recordingStateRef.current = recordingState;
+  }, [recordingState]);
+
+  const handleStopRecording = useCallback(async () => {
+    // Guard against double-stop
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+
+    try {
+      await invoke("stop_recording");
+    } catch {}
+
+    // Wait for ffmpeg to finalize the file (Rust waits up to 3s + kill)
+    await new Promise((r) => setTimeout(r, 2000));
+
+    try {
+      await invoke("close_toolbar_window");
+    } catch {}
+
+    const duration = Date.now() - recordingStartTimeRef.current;
+    const totalSeconds = Math.floor(duration / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const durationStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+
+    const filePath = actualFilePathRef.current || "";
+    const fileName = filePath.split("/").pop() || "Recording.mp4";
+
+    let fileSize = "N/A";
+    try {
+      const sizeBytes = await invoke<number>("get_file_size", { path: filePath });
+      if (sizeBytes > 1048576) {
+        fileSize = `${(sizeBytes / 1048576).toFixed(1)} MB`;
+      } else {
+        fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
+      }
+    } catch {}
+
+    addRecording({
+      name: fileName,
+      duration: durationStr,
+      resolution: settings.resolution === "original" ? "1920x1080" : settings.resolution.toUpperCase(),
+      fps: `${settings.frameRate} FPS`,
+      size: fileSize,
+      date: new Date().toLocaleDateString(),
+      path: filePath,
+    });
+
+    setSavedRecording({ fileName, fileSize, duration: durationStr, filePath });
+    setCameraVisible(false);
+    setRecordingState("saved");
+    isStoppingRef.current = false;
+
+    try {
+      await invoke("show_notification", {
+        title: "Recording Saved",
+        body: `${fileName} has been saved.`,
+      });
+    } catch {}
+
+    if (settings.autoOpenFolder) {
+      try {
+        const expandedPath = await invoke<string>("get_file_url", { path: settings.saveLocation });
+        await invoke("open_folder", { path: expandedPath });
+      } catch {}
+    }
+  }, [settings, addRecording]);
+
+  // Listen for events from toolbar / tray
   useEffect(() => {
     const unlistenStop = listen("recording-stop", () => {
       handleStopRecording();
@@ -54,21 +128,20 @@ function MainWindow() {
     });
 
     const unlistenTrayStart = listen("tray-start-recording", () => {
-      if (recordingState === "idle") {
+      if (recordingStateRef.current === "idle") {
         handleStartRecording();
       }
     });
 
     const unlistenTrayStop = listen("tray-stop-recording", () => {
-      if (recordingState === "recording" || recordingState === "paused") {
+      const s = recordingStateRef.current;
+      if (s === "recording" || s === "paused") {
         handleStopRecording();
       }
     });
 
     const unlistenTrayPause = listen("tray-pause-recording", () => {
-      if (recordingState === "recording" || recordingState === "paused") {
-        setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
-      }
+      setRecordingState((prev) => (prev === "recording" ? "paused" : "recording"));
     });
 
     return () => {
@@ -78,7 +151,7 @@ function MainWindow() {
       unlistenTrayStop.then((fn) => fn());
       unlistenTrayPause.then((fn) => fn());
     };
-  }, [recordingState]);
+  }, [handleStopRecording]);
 
   const handleNavigate = (page: Page, tab?: string) => {
     setCurrentPage(page);
@@ -87,21 +160,18 @@ function MainWindow() {
 
   const handleStartRecording = useCallback(async () => {
     try {
-      // Check FFmpeg
       const ffmpegInstalled = await invoke<boolean>("check_ffmpeg_installed");
       if (!ffmpegInstalled) {
         setError({ type: "ffmpeg-not-found", message: "FFmpeg is not installed. Please install FFmpeg: brew install ffmpeg" });
         return;
       }
 
-      // Check permissions
       const perms = await invoke<{ screen: boolean }>("check_permissions");
       if (!perms.screen) {
         setError({ type: "permission-denied" });
         return;
       }
 
-      // Check disk space - expand ~ in path
       const expandedPath = settings.saveLocation.replace("~", await invoke<string>("get_home_dir"));
       const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) {
@@ -109,7 +179,6 @@ function MainWindow() {
         return;
       }
 
-      // Go to selection overlay so user can choose fullscreen, window, or area
       const win = getCurrentWindow();
       await win.setFullscreen(true);
       await new Promise((r) => setTimeout(r, 300));
@@ -121,31 +190,26 @@ function MainWindow() {
   }, [settings.saveLocation]);
 
   const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
-    // Store the capture mode and bounds
     setCaptureMode(mode as "fullscreen" | "window" | "area");
     setCaptureBounds(bounds || null);
 
-    // Exit fullscreen
     const win = getCurrentWindow();
     await win.setFullscreen(false);
     await new Promise((r) => setTimeout(r, 200));
 
-    // Start countdown - toolbar will be created after countdown completes
     setRecordingState("countdown");
   }, []);
 
   const handleCountdownComplete = useCallback(async () => {
-    // Hide main window so it's not captured in recording
     try {
-      await invoke("create_toolbar_window"); // This now hides main window
+      await invoke("create_toolbar_window");
     } catch (err) {
       console.error("Failed to hide window:", err);
     }
 
+    recordingStartTimeRef.current = Date.now();
     setRecordingState("recording");
-    setRecordingStartTime(Date.now());
 
-    // Start actual recording via Rust backend
     try {
       const filePath = await invoke<string>("start_recording", {
         options: {
@@ -165,90 +229,19 @@ function MainWindow() {
           saveLocation: settings.saveLocation,
         },
       });
-      setActualFilePath(filePath);
+      actualFilePathRef.current = filePath;
     } catch (err) {
       console.error("Failed to start recording:", err);
       setError({ type: "recording-failed", message: String(err) });
-      // Show main window back on error
       await invoke("close_toolbar_window");
       setRecordingState("idle");
     }
   }, [settings, captureMode, captureBounds]);
 
-  const handleStopRecording = useCallback(async () => {
-    try {
-      await invoke("stop_recording");
-      // Show main window again
-      await invoke("close_toolbar_window");
-    } catch {}
-
-    // Wait a moment for ffmpeg to finish writing the file
-    await new Promise((r) => setTimeout(r, 500));
-
-    const duration = Date.now() - recordingStartTime;
-    const totalSeconds = Math.floor(duration / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const durationStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-    // Use the actual file path from the backend (already expanded by Rust)
-    const filePath = actualFilePath || "";
-    const fileName = filePath.split('/').pop() || "Recording.mp4";
-
-    // Get actual file size
-    let fileSize = "N/A";
-    try {
-      const sizeBytes = await invoke<number>("get_file_size", { path: filePath });
-      if (sizeBytes > 1048576) {
-        fileSize = `${(sizeBytes / 1048576).toFixed(1)} MB`;
-      } else {
-        fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
-      }
-    } catch {}
-
-    // Save to recordings store
-    addRecording({
-      name: fileName,
-      duration: durationStr,
-      resolution: settings.resolution === "original" ? "1920x1080" : settings.resolution.toUpperCase(),
-      fps: `${settings.frameRate} FPS`,
-      size: fileSize,
-      date: new Date().toLocaleDateString(),
-      path: filePath,
-    });
-
-    setSavedRecording({
-      fileName,
-      fileSize,
-      duration: durationStr,
-      filePath,
-    });
-
-    setCameraVisible(false);
-    setRecordingState("saved");
-
-    // Show notification
-    try {
-      await invoke("show_notification", {
-        title: "Recording Saved",
-        body: `${fileName} has been saved.`,
-      });
-    } catch {}
-
-    // Open folder if setting enabled
-    if (settings.autoOpenFolder) {
-      try {
-        const expandedPath = await invoke<string>("get_file_url", { path: settings.saveLocation });
-        await invoke("open_folder", { path: expandedPath });
-      } catch {}
-    }
-  }, [recordingStartTime, settings, addRecording, actualFilePath]);
-
   const handleDismissSaved = useCallback(() => {
     setRecordingState("idle");
     setSavedRecording(null);
-    setActualFilePath(null);
+    actualFilePathRef.current = null;
   }, []);
 
   const handleCameraToggle = useCallback(() => {
@@ -279,7 +272,6 @@ function MainWindow() {
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
-      {/* Selection Overlay - renders fullscreen in main window */}
       {recordingState === "selecting" && (
         <SelectionOverlay
           onCapture={handleCapture}
@@ -291,12 +283,10 @@ function MainWindow() {
         />
       )}
 
-      {/* Countdown */}
       {recordingState === "countdown" && (
         <Countdown onComplete={handleCountdownComplete} />
       )}
 
-      {/* Camera Overlay */}
       <CameraOverlay
         visible={isRecording && cameraVisible}
         shape={cameraShape}
@@ -304,7 +294,6 @@ function MainWindow() {
         onToggle={handleCameraToggle}
       />
 
-      {/* Recording Success */}
       {recordingState === "saved" && savedRecording && (
         <RecordingSuccess
           fileName={savedRecording.fileName}
@@ -336,7 +325,6 @@ function MainWindow() {
         />
       )}
 
-      {/* Error Notification */}
       {error && (
         <ErrorNotification
           type={error.type}
@@ -351,7 +339,6 @@ function MainWindow() {
   );
 }
 
-// App - just render main window
 function App() {
   return <MainWindow />;
 }
