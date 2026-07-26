@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import ThemeProvider from "./components/ThemeProvider";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -9,17 +8,18 @@ import Recordings from "./pages/Recordings";
 import Settings from "./pages/Settings";
 import ShortcutsPage from "./pages/ShortcutsPage";
 import About from "./pages/About";
-import SelectionOverlay from "./components/SelectionOverlay";
 import Countdown from "./components/Countdown";
 import ToolbarWindow from "./components/ToolbarWindow";
+import OverlayWindow from "./components/OverlayWindow";
 import RecordingSuccess from "./components/RecordingSuccess";
 import CameraOverlay from "./components/CameraOverlay";
 import ErrorNotification from "./components/ErrorNotification";
+import DrawingWindow from "./components/DrawingWindow";
 import { useSettings } from "./stores/settingsStore";
 import { useRecordings } from "./stores/recordingsStore";
 
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
-type RecordingState = "idle" | "selecting" | "countdown" | "recording" | "paused" | "saved";
+type RecordingState = "idle" | "selecting" | "ready" | "countdown" | "recording" | "paused" | "saved";
 type CameraShape = "circle" | "rounded" | "square";
 type ErrorType = "no-microphone" | "disk-full" | "permission-denied" | "recording-failed" | "encoder-unavailable" | "camera-not-found" | "ffmpeg-not-found";
 
@@ -35,7 +35,6 @@ function MainWindow() {
   } | null>(null);
   const [captureBounds, setCaptureBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [captureMode, setCaptureMode] = useState<"fullscreen" | "window" | "area">("fullscreen");
-  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
 
   const recordingStartTimeRef = useRef<number>(0);
   const actualFilePathRef = useRef<string | null>(null);
@@ -54,6 +53,7 @@ function MainWindow() {
     try { await invoke("stop_recording"); } catch {}
     await new Promise((r) => setTimeout(r, 2000));
     try { await invoke("close_toolbar_window"); } catch {}
+    try { await invoke("close_drawing_window"); } catch {}
 
     const duration = Date.now() - recordingStartTimeRef.current;
     const totalSeconds = Math.floor(duration / 1000);
@@ -90,7 +90,19 @@ function MainWindow() {
   useEffect(() => {
     const unlistenStop = listen("recording-stop", () => handleStopRecording());
     const unlistenPause = listen("recording-toggle-pause", () => setRecordingState((prev) => (prev === "recording" ? "paused" : "recording")));
-    const unlistenTrayStart = listen("tray-start-recording", () => { if (recordingStateRef.current === "idle") handleStartRecording(); });
+    const unlistenTrayStart = listen("tray-start-recording", () => { 
+        const s = recordingStateRef.current;
+        if (s === "idle" || s === "saved") {
+            handleStartRecording(); 
+        } else if (s === "ready") {
+            // Trigger countdown or start
+            if (settings.countdownEnabled) {
+                setRecordingState("countdown");
+            } else {
+                handleCountdownComplete();
+            }
+        }
+    });
     const unlistenTrayStop = listen("tray-stop-recording", () => { const s = recordingStateRef.current; if (s === "recording" || s === "paused") handleStopRecording(); });
     const unlistenTrayPause = listen("tray-pause-recording", () => setRecordingState((prev) => (prev === "recording" ? "paused" : "recording")));
     return () => {
@@ -100,7 +112,7 @@ function MainWindow() {
       unlistenTrayStop.then((fn) => fn());
       unlistenTrayPause.then((fn) => fn());
     };
-  }, [handleStopRecording]);
+  }, [handleStopRecording, settings.countdownEnabled]);
 
   const handleNavigate = (page: Page, tab?: string) => {
     setCurrentPage(page);
@@ -121,47 +133,28 @@ function MainWindow() {
       const diskSpace = await invoke<{ availableGB: number }>("get_disk_space", { path: expandedPath });
       if (diskSpace.availableGB < 0.5) { setError({ type: "disk-full" }); return; }
 
-      // Go fullscreen so the selection overlay covers the ENTIRE desktop
-      const win = getCurrentWindow();
-      await win.setFullscreen(true);
-      await new Promise((r) => setTimeout(r, 500));
-
-      // Capture screenshot of the full screen
+      // Create a fullscreen transparent overlay window for selection
+      // This hides the main window and shows a gray overlay on the desktop
       try {
-        const path = await invoke<string>("capture_screen");
-        setScreenshotPath(path);
-      } catch { setScreenshotPath(null); }
-
-      setRecordingState("selecting");
+        await invoke("create_selection_overlay");
+      } catch (err) {
+        setError({ type: "recording-failed", message: String(err) });
+      }
     } catch (err) {
       setError({ type: "recording-failed", message: String(err) });
     }
   }, [settings.saveLocation]);
 
-  const handleCapture = useCallback(async (mode: string, bounds?: { x: number; y: number; w: number; h: number }) => {
-    setCaptureMode(mode as "fullscreen" | "window" | "area");
-    setCaptureBounds(bounds || null);
-
-    // Exit fullscreen before countdown
-    try {
-      const win = getCurrentWindow();
-      await win.setFullscreen(false);
-      await new Promise((r) => setTimeout(r, 300));
-    } catch {}
-
-    if (settings.countdownEnabled) {
-      setRecordingState("countdown");
-    } else {
-      handleCountdownComplete();
-    }
-  }, [settings.countdownEnabled]);
-
   const handleCountdownComplete = useCallback(async () => {
     recordingStartTimeRef.current = Date.now();
     setRecordingState("recording");
-
-    // Create toolbar window and hide main window
+    
     try { await invoke("create_toolbar_window"); } catch {}
+    try { await invoke("create_drawing_window"); } catch {}
+    try { await invoke("minimize_main_window"); } catch {}
+    
+    // Broadcast to toolbar that recording formally began
+    try { await emit("recording-started"); } catch {}
 
     try {
       const filePath = await invoke<string>("start_recording", {
@@ -179,15 +172,36 @@ function MainWindow() {
     } catch (err) {
       setError({ type: "recording-failed", message: String(err) });
       try { await invoke("close_toolbar_window"); } catch {}
+      try { await invoke("close_drawing_window"); } catch {}
       setRecordingState("idle");
     }
   }, [settings, captureMode, captureBounds]);
+
+  useEffect(() => {
+    const unlistenCapture = listen<{mode: string, x?: number, y?: number, w?: number, h?: number}>("overlay-capture", (event) => {
+      const p = event.payload;
+      setCaptureMode(p.mode as any);
+      if (p.w != null && p.h != null) {
+        setCaptureBounds({ x: p.x ?? 0, y: p.y ?? 0, w: p.w, h: p.h });
+      } else {
+        setCaptureBounds(null);
+      }
+      
+      if (settings.countdownEnabled) {
+        setRecordingState("countdown");
+      } else {
+        handleCountdownComplete();
+      }
+    });
+    return () => {
+      unlistenCapture.then((fn) => fn());
+    };
+  }, [settings.countdownEnabled, handleCountdownComplete]);
 
   const handleDismissSaved = useCallback(() => {
     setRecordingState("idle");
     setSavedRecording(null);
     actualFilePathRef.current = null;
-    setScreenshotPath(null);
   }, []);
 
   const renderPage = () => {
@@ -206,22 +220,6 @@ function MainWindow() {
       {/* Sidebar — ALWAYS visible */}
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
-
-      {/* Selection overlay — shows within app window with screenshot background */}
-      {recordingState === "selecting" && (
-        <SelectionOverlay
-          screenshotPath={screenshotPath}
-          onCapture={handleCapture}
-          onCancel={async () => {
-            try {
-              const win = getCurrentWindow();
-              await win.setFullscreen(false);
-            } catch {}
-            setRecordingState("idle");
-            setScreenshotPath(null);
-          }}
-        />
-      )}
 
       {recordingState === "countdown" && <Countdown onComplete={handleCountdownComplete} />}
 
@@ -254,10 +252,14 @@ function MainWindow() {
 }
 
 function App() {
-  const isToolbar = window.location.hash === "#toolbar";
+  const hash = window.location.hash;
+  const isToolbar = hash === "#toolbar";
+  const isOverlay = hash === "#overlay";
+  const isDrawing = hash === "#drawing";
+
   return (
     <ThemeProvider>
-      {isToolbar ? <ToolbarWindow /> : <MainWindow />}
+      {isOverlay ? <OverlayWindow /> : isToolbar ? <ToolbarWindow /> : isDrawing ? <DrawingWindow /> : <MainWindow />}
     </ThemeProvider>
   );
 }

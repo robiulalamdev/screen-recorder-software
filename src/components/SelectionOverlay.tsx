@@ -35,7 +35,16 @@ export default function SelectionOverlay({ screenshotPath, onCapture, onCancel }
 
   const handleOverlayMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging) return;
-    setEnd({ x: e.clientX, y: e.clientY });
+    const SNAP = 20; // 20px threshold for edge snapping
+    let x = e.clientX;
+    let y = e.clientY;
+
+    if (x < SNAP) x = 0;
+    if (y < SNAP) y = 0;
+    if (window.innerWidth - x < SNAP) x = window.innerWidth;
+    if (window.innerHeight - y < SNAP) y = window.innerHeight;
+
+    setEnd({ x, y });
   }, [isDragging]);
 
   const handleOverlayMouseUp = useCallback(() => {

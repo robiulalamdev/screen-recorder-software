@@ -35,6 +35,25 @@ export default function FloatingToolbar({
   const [showDrawingTools, setShowDrawingTools] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
+  // Ensure interactive controls inside the tauri drag region remain clickable.
+  // Tauri marks the container as a drag region which can swallow pointer events.
+  // Inject a small stylesheet that disables the drag region for interactive elements
+  // inside this toolbar so buttons, inputs and svgs remain clickable.
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "floating-toolbar-no-drag";
+    style.innerHTML = `
+      [data-tauri-drag-region] button,
+      [data-tauri-drag-region] input,
+      [data-tauri-drag-region] a,
+      [data-tauri-drag-region] svg {
+        -webkit-app-region: no-drag !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   useEffect(() => {
     const timer = setInterval(() => {
       if (!isPaused) setElapsed((e) => e + 1);

@@ -15,6 +15,7 @@ use tauri::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RecordingOptions {
     mode: String,          // "fullscreen", "window", "area"
     x: Option<f64>,
@@ -43,6 +44,81 @@ static RECORDING_STATE: Mutex<RecordingState> = Mutex::new(RecordingState {
     is_paused: false,
     pid: None,
 });
+
+#[tauri::command]
+fn create_selection_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewUrl;
+
+    // Close existing overlay
+    if let Some(existing) = app.get_webview_window("overlay") {
+        let _ = existing.close();
+    }
+
+    // Get full screen size
+    let main_window = app.get_webview_window("main").ok_or("Main window not found")?;
+    let monitor = main_window.primary_monitor().map_err(|e| e.to_string())?.ok_or("No monitor found")?;
+    let screen_w = monitor.size().width;
+    let screen_h = monitor.size().height;
+    let scale = monitor.scale_factor();
+
+    // Create fullscreen transparent overlay window
+    let overlay = WebviewWindowBuilder::new(
+        &app,
+        "overlay",
+        WebviewUrl::App("/#overlay".into()),
+    )
+    .title("Selection")
+    .inner_size(screen_w as f64 / scale, screen_h as f64 / scale)
+    .position(0.0, 0.0)
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .transparent(true)
+    .build()
+    .map_err(|e| format!("Failed to create overlay: {}", e))?;
+
+    // Hide main window so it's not in the way
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.hide();
+    }
+
+    let _ = overlay.set_focus();
+    Ok(())
+}
+
+#[tauri::command]
+fn close_selection_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.close();
+    }
+    // Show main window again
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.set_focus();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn start_recording_from_overlay(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    // Determine capture mode based on bounds
+    let (mode, bounds) = if w <= 0.0 && h <= 0.0 {
+        ("fullscreen".to_string(), None)
+    } else {
+        ("area".to_string(), Some(serde_json::json!({
+            "x": x, "y": y, "w": w, "h": h
+        })))
+    };
+
+    // Emit event to main window with capture info
+    let _ = app.emit("overlay-capture", serde_json::json!({
+        "mode": mode,
+        "x": x, "y": y, "w": w, "h": h
+    }));
+
+    Ok(())
+}
 
 #[tauri::command]
 fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
@@ -77,7 +153,7 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .transparent(false)
+    .transparent(true)
     .build()
     .map_err(|e| format!("Failed to create toolbar window: {}", e))?;
 
@@ -102,6 +178,64 @@ fn close_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
         let _ = main_window.set_focus();
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+fn create_drawing_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewUrl;
+
+    if let Some(existing) = app.get_webview_window("drawing") {
+        let _ = existing.close();
+    }
+
+    let scale = app.get_webview_window("main")
+        .and_then(|w| w.primary_monitor().ok())
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+
+    let monitor_size = app.get_webview_window("main")
+        .and_then(|w| w.primary_monitor().ok())
+        .flatten()
+        .map(|m| (m.size().width, m.size().height))
+        .unwrap_or((1920, 1080));
+
+    let overlay = WebviewWindowBuilder::new(
+        &app,
+        "drawing",
+        WebviewUrl::App("/#drawing".into()),
+    )
+    .title("Drawing Overlay")
+    .inner_size(monitor_size.0 as f64 / scale, monitor_size.1 as f64 / scale)
+    .position(0.0, 0.0)
+    .resizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .transparent(true)
+    .build()
+    .map_err(|e| format!("Failed to create drawing window: {}", e))?;
+
+    let _ = overlay.set_ignore_cursor_events(true);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn close_drawing_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(drawing) = app.get_webview_window("drawing") {
+        let _ = drawing.close();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_drawing_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    if let Some(drawing) = app.get_webview_window("drawing") {
+        let _ = drawing.set_ignore_cursor_events(!enabled);
+        let _ = drawing.emit("set-drawing-mode", enabled);
+    }
     Ok(())
 }
 
@@ -230,7 +364,7 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
     args.push("-i".into());
 
     // Build capture device string - always capture full screen first
-    args.push("1:0:none".to_string());
+    args.push("1:none".to_string());
 
     // Add audio input if microphone enabled
     if options.microphone.as_deref() != Some("muted") {
@@ -353,7 +487,7 @@ fn stop_recording(app: tauri::AppHandle) -> Result<(), String> {
     state.pid = None;
 
     // Emit event to frontend
-    let _ = app.emit("recording-stopped", ());
+    let _ = app.emit("recording-stop", ());
 
     Ok(())
 }
@@ -830,63 +964,70 @@ pub fn run() {
                 .build(app)?;
 
             // Register global keyboard shortcuts
-            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
             let app_handle = app.handle().clone();
 
             let shortcuts_list = vec![
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyR), "start-stop"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyP), "pause-resume"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS), "stop"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC), "screenshot"),
-                (Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT), "toggle-toolbar"),
+                (Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyR), "start-stop"),
+                (Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyP), "pause-resume"),
+                (Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyS), "stop"),
+                (Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyC), "screenshot"),
+                (Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyT), "toggle-toolbar"),
             ];
 
+            let gs = app.global_shortcut();
             for (shortcut, name) in shortcuts_list {
                 let app_handle_clone = app_handle.clone();
                 let name_owned = name.to_string();
-                app.global_shortcut().on_shortcut(shortcut, move |_app_handle, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        match name_owned.as_str() {
-                            "start-stop" => {
-                                let is_recording = {
-                                    let state = RECORDING_STATE.lock().unwrap();
-                                    state.is_recording
-                                };
-                                let event_name = if is_recording { "tray-stop-recording" } else { "tray-start-recording" };
-                                let _ = app_handle_clone.emit(event_name, ());
-                            }
-                            "pause-resume" => {
-                                let _ = app_handle_clone.emit("tray-pause-recording", ());
-                            }
-                            "stop" => {
-                                let _ = app_handle_clone.emit("tray-stop-recording", ());
-                            }
-                            "screenshot" => {
-                                let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                                let _ = Command::new("screencapture")
-                                    .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", ts)])
-                                    .spawn();
-                            }
-                            "toggle-toolbar" => {
-                                let _ = app_handle_clone.emit("toggle-toolbar", ());
-                            }
-                            _ => {}
+                if let Err(e) = gs.on_shortcut(shortcut, move |_app_handle, _shortcut, _event| {
+                    match name_owned.as_str() {
+                        "start-stop" => {
+                            let is_recording = {
+                                let state = RECORDING_STATE.lock().unwrap();
+                                state.is_recording
+                            };
+                            let event_name = if is_recording { "tray-stop-recording" } else { "tray-start-recording" };
+                            let _ = app_handle_clone.emit(event_name, ());
                         }
+                        "pause-resume" => {
+                            let _ = app_handle_clone.emit("tray-pause-recording", ());
+                        }
+                        "stop" => {
+                            let _ = app_handle_clone.emit("tray-stop-recording", ());
+                        }
+                        "screenshot" => {
+                            let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                            let _ = Command::new("screencapture")
+                                .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", ts)])
+                                .spawn();
+                        }
+                        "toggle-toolbar" => {
+                            let _ = app_handle_clone.emit("toggle-toolbar", ());
+                        }
+                        _ => {}
                     }
-                }).expect("Failed to register shortcut");
+                }) {
+                    eprintln!("Failed to register shortcut '{}': {}", name, e);
+                }
             }
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            create_selection_overlay,
+            close_selection_overlay,
             create_toolbar_window,
             close_toolbar_window,
+            create_drawing_window,
+            close_drawing_window,
+            toggle_drawing_mode,
             capture_screen,
             minimize_main_window,
             restore_main_window,
             get_screen_size,
             start_recording,
+            start_recording_from_overlay,
             stop_recording,
             pause_recording,
             resume_recording,
