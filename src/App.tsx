@@ -113,6 +113,7 @@ function MainWindow() {
 
     addRecording({
       name: fileName,
+      type: "video",
       duration: durationStr,
       resolution:
         settings.resolution === "original"
@@ -187,15 +188,6 @@ function MainWindow() {
 
   const handleStartRecording = useCallback(async () => {
     try {
-      const ffmpegInstalled = await invoke<boolean>("check_ffmpeg_installed");
-      if (!ffmpegInstalled) {
-        setError({
-          type: "ffmpeg-not-found",
-          message:
-            "FFmpeg is not installed. Please install FFmpeg: brew install ffmpeg",
-        });
-        return;
-      }
       const perms = await invoke<{ screen: boolean }>("check_permissions");
       if (!perms.screen) {
         setError({ type: "permission-denied" });

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* Dark theme (default) */
-:root, .dark {
+:root,
+.dark {
   --bg-primary: #0d0d14;
   --bg-secondary: #13131f;
   --bg-tertiary: #16162a;
@@ -53,8 +54,19 @@
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-::selection { background: rgba(139, 92, 246, 0.3); }
+::-webkit-scrollbar {
+  width: 0px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+}

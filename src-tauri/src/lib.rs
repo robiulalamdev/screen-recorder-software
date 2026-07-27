@@ -232,13 +232,42 @@ fn close_drawing_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn toggle_drawing_mode(app: tauri::AppHandle, enabled: bool, color: Option<String>, size: Option<f64>) -> Result<(), String> {
+fn toggle_drawing_mode(app: tauri::AppHandle, enabled: bool, color: Option<String>, size: Option<f64>, eraser: Option<bool>) -> Result<(), String> {
     if let Some(drawing) = app.get_webview_window("drawing") {
         let _ = drawing.set_ignore_cursor_events(!enabled);
         let _ = drawing.emit("set-drawing-mode", enabled);
         if let (Some(c), Some(s)) = (color, size) {
-            let _ = drawing.emit("set-pen-style", serde_json::json!({ "color": c, "size": s }));
+            let _ = drawing.emit("set-pen-style", serde_json::json!({ "color": c, "size": s, "eraser": eraser.unwrap_or(false) }));
         }
+    }
+    if enabled {
+        if let Some(toolbar) = app.get_webview_window("toolbar") {
+            let _ = toolbar.set_focus();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn focus_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(toolbar) = app.get_webview_window("toolbar") {
+        let _ = toolbar.set_focus();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_drawing_pen_style(app: tauri::AppHandle, color: String, size: f64, eraser: Option<bool>) -> Result<(), String> {
+    if let Some(drawing) = app.get_webview_window("drawing") {
+        let _ = drawing.emit("set-pen-style", serde_json::json!({ "color": color, "size": size, "eraser": eraser.unwrap_or(false) }));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_drawing(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(drawing) = app.get_webview_window("drawing") {
+        let _ = drawing.emit("clear-drawing", ());
     }
     Ok(())
 }
@@ -539,11 +568,16 @@ fn take_screenshot(save_location: Option<String>) -> Result<String, String> {
         "png",
     )?;
 
-    // Use screencapture on macOS
+    // Use screencapture on macOS with full path
     #[cfg(target_os = "macos")]
     {
-        let output = Command::new("screencapture")
-            .args(&["-x", &path])
+        let screencapture = if std::path::Path::new("/usr/sbin/screencapture").exists() {
+            "/usr/sbin/screencapture"
+        } else {
+            "screencapture"
+        };
+        let output = Command::new(screencapture)
+            .args(&["-x", "-t", "png", &path])
             .output()
             .map_err(|e| format!("Failed to take screenshot: {}", e))?;
 
@@ -968,7 +1002,7 @@ pub fn run() {
                 .build(app)?;
 
             // Register global keyboard shortcuts
-            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
             let app_handle = app.handle().clone();
 
@@ -984,7 +1018,10 @@ pub fn run() {
             for (shortcut, name) in shortcuts_list {
                 let app_handle_clone = app_handle.clone();
                 let name_owned = name.to_string();
-                if let Err(e) = gs.on_shortcut(shortcut, move |_app_handle, _shortcut, _event| {
+                if let Err(e) = gs.on_shortcut(shortcut, move |_app_handle, _shortcut, event| {
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
                     match name_owned.as_str() {
                         "start-stop" => {
                             let is_recording = {
@@ -1001,10 +1038,17 @@ pub fn run() {
                             let _ = app_handle_clone.emit("tray-stop-recording", ());
                         }
                         "screenshot" => {
-                            let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                            let _ = Command::new("screencapture")
-                                .args(&["-x", "-t", "png", &format!("/tmp/screenshot_{}.png", ts)])
-                                .spawn();
+                            // Only take screenshot when recording is active
+                            let is_recording = {
+                                let state = RECORDING_STATE.lock().unwrap();
+                                state.is_recording
+                            };
+                            if !is_recording {
+                                return;
+                            }
+
+                            // Tell the toolbar frontend to handle the screenshot (it can move itself off-screen, take screenshot, restore)
+                            let _ = app_handle_clone.emit("shortcut-trigger-screenshot", ());
                         }
                         "toggle-toolbar" => {
                             let _ = app_handle_clone.emit("toggle-toolbar", ());
@@ -1026,6 +1070,9 @@ pub fn run() {
             create_drawing_window,
             close_drawing_window,
             toggle_drawing_mode,
+            focus_toolbar_window,
+            set_drawing_pen_style,
+            clear_drawing,
             capture_screen,
             minimize_main_window,
             restore_main_window,

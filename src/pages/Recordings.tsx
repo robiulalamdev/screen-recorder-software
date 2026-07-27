@@ -61,14 +61,24 @@ export default function Recordings() {
             className="flex items-center gap-3 sm:gap-4 p-3 rounded-xl border transition-colors group"
             style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
             onContextMenu={(e) => { e.preventDefault(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}>
-            {/* Video Thumbnail */}
+            {/* Thumbnail */}
             <div className="w-24 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
               style={{ backgroundColor: "var(--bg-elevated)" }}>
-              <VideoThumbnail path={rec.path} />
+              {rec.type === "screenshot" ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+                  <path d="M15 3h6v6" />
+                  <path d="M10 14 21 3" />
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                </svg>
+              ) : (
+                <VideoThumbnail path={rec.path} />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{rec.duration} &middot; {rec.resolution} &middot; {rec.fps}</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                {rec.type === "screenshot" ? "Screenshot" : `${rec.duration} &middot; ${rec.resolution} &middot; ${rec.fps}`}
+              </p>
             </div>
             <div className="text-right shrink-0 hidden sm:block">
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rec.size}</p>

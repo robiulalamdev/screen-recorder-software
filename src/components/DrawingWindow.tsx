@@ -1,26 +1,28 @@
 import React, { useRef, useState, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 export default function DrawingWindow() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [enabled, setEnabled] = useState(false); // Controls if we accept input
+  const [enabled, setEnabled] = useState(false);
   const [color, setColor] = useState("#ef4444");
-  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const [lineWidth, setLineWidth] = useState(4);
+  const [isEraser, setIsEraser] = useState(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    // Listen for mode changes from toolbar
     const unlistenMode = listen<boolean>("set-drawing-mode", (e) => setEnabled(e.payload));
-    const unlistenTool = listen<{ tool: "pen" | "eraser"; color?: string }>("set-drawing-tool", (e) => {
-      setTool(e.payload.tool);
-      if (e.payload.color) setColor(e.payload.color);
+    const unlistenStyle = listen<{ color: string; size: number; eraser: boolean }>("set-pen-style", (e) => {
+      setColor(e.payload.color);
+      setLineWidth(e.payload.size);
+      setIsEraser(e.payload.eraser ?? false);
     });
     const unlistenClear = listen("clear-drawing", () => clearCanvas());
 
     return () => {
       unlistenMode.then((f) => f());
-      unlistenTool.then((f) => f());
+      unlistenStyle.then((f) => f());
       unlistenClear.then((f) => f());
     };
   }, []);
@@ -61,16 +63,10 @@ export default function DrawingWindow() {
     ctx.beginPath();
     ctx.moveTo(lastPos.current.x, lastPos.current.y);
     ctx.lineTo(currentPos.x, currentPos.y);
-    
-    if (tool === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.lineWidth = 20;
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 4;
-      ctx.lineCap = "round";
-    }
+    ctx.globalCompositeOperation = isEraser ? "destination-out" : "source-over";
+    ctx.strokeStyle = isEraser ? "rgba(0,0,0,1)" : color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = "round";
     
     ctx.stroke();
     lastPos.current = currentPos;
@@ -79,6 +75,7 @@ export default function DrawingWindow() {
   const stopDrawing = () => {
     setIsDrawing(false);
     lastPos.current = null;
+    invoke("focus_toolbar_window");
   };
 
   return (

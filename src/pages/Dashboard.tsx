@@ -73,7 +73,7 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Recent Recordings</h2>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Recent</h2>
           <button onClick={() => onNavigate("recordings")} className="text-xs hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }}>
             View all
           </button>
@@ -86,14 +86,24 @@ export default function Dashboard({ onNavigate, onStartRecording }: DashboardPro
               style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
             >
               <div className="hidden sm:flex w-24 h-14 rounded-lg items-center justify-center shrink-0" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
-                  <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
-                  <rect x="2" y="6" width="14" height="12" rx="2" />
-                </svg>
+                {rec.type === "screenshot" ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+                    <path d="M15 3h6v6" />
+                    <path d="M10 14 21 3" />
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+                    <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+                    <rect x="2" y="6" width="14" height="12" rx="2" />
+                  </svg>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{rec.duration} &middot; {rec.resolution} &middot; {rec.fps}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {rec.type === "screenshot" ? "Screenshot" : `${rec.duration} &middot; ${rec.resolution} &middot; ${rec.fps}`}
+                </p>
               </div>
               <div className="text-right shrink-0 hidden sm:block">
                 <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rec.size}</p>

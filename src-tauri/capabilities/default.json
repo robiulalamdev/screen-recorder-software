@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "overlay",
-    "toolbar"
+    "toolbar",
+    "drawing"
   ],
   "permissions": [
     "core:default",
@@ -23,6 +24,8 @@
     "core:window:allow-set-resizable",
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-start-dragging",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
     "opener:default",
     "global-shortcut:default"
   ]

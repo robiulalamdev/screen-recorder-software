@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 export interface Recording {
   id: string;
   name: string;
+  type: "video" | "screenshot";
   duration: string;
   resolution: string;
   fps: string;
