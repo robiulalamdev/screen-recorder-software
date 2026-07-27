@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "overlay", "toolbar"],
+  "windows": [
+    "main",
+    "overlay",
+    "toolbar"
+  ],
   "permissions": [
     "core:default",
     "core:window:default",
@@ -18,6 +22,7 @@
     "core:window:allow-set-decorations",
     "core:window:allow-set-resizable",
     "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-start-dragging",
     "opener:default",
     "global-shortcut:default"
   ]

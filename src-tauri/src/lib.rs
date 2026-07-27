@@ -152,6 +152,7 @@ fn create_toolbar_window(app: tauri::AppHandle) -> Result<(), String> {
     .resizable(false)
     .decorations(false)
     .always_on_top(true)
+    .visible_on_all_workspaces(true)
     .skip_taskbar(true)
     .transparent(true)
     .build()
@@ -231,10 +232,13 @@ fn close_drawing_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn toggle_drawing_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+fn toggle_drawing_mode(app: tauri::AppHandle, enabled: bool, color: Option<String>, size: Option<f64>) -> Result<(), String> {
     if let Some(drawing) = app.get_webview_window("drawing") {
         let _ = drawing.set_ignore_cursor_events(!enabled);
         let _ = drawing.emit("set-drawing-mode", enabled);
+        if let (Some(c), Some(s)) = (color, size) {
+            let _ = drawing.emit("set-pen-style", serde_json::json!({ "color": c, "size": s }));
+        }
     }
     Ok(())
 }
