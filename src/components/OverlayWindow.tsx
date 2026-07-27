@@ -315,14 +315,14 @@ export default function OverlayWindow() {
   }, [systemAudioEnabled]);
 
   const resizeHandles: { edge: ResizeEdge; cursor: string; style: React.CSSProperties }[] = [
-    { edge: "tl", cursor: "nwse-resize", style: { left: -5, top: -5 } },
-    { edge: "tr", cursor: "nesw-resize", style: { right: -5, top: -5 } },
-    { edge: "bl", cursor: "nesw-resize", style: { left: -5, bottom: -5 } },
-    { edge: "br", cursor: "nwse-resize", style: { right: -5, bottom: -5 } },
-    { edge: "t", cursor: "ns-resize", style: { left: "50%", top: -5, transform: "translateX(-50%)" } },
-    { edge: "b", cursor: "ns-resize", style: { left: "50%", bottom: -5, transform: "translateX(-50%)" } },
-    { edge: "l", cursor: "ew-resize", style: { top: "50%", left: -5, transform: "translateY(-50%)" } },
-    { edge: "r", cursor: "ew-resize", style: { top: "50%", right: -5, transform: "translateY(-50%)" } },
+    { edge: "tl", cursor: "nwse-resize", style: { left: rect.x - 5, top: rect.y - 5 } },
+    { edge: "tr", cursor: "nesw-resize", style: { left: rect.x + rect.w - 5, top: rect.y - 5 } },
+    { edge: "bl", cursor: "nesw-resize", style: { left: rect.x - 5, top: rect.y + rect.h - 5 } },
+    { edge: "br", cursor: "nwse-resize", style: { left: rect.x + rect.w - 5, top: rect.y + rect.h - 5 } },
+    { edge: "t", cursor: "ns-resize", style: { left: rect.x + rect.w / 2 - 5, top: rect.y - 5 } },
+    { edge: "b", cursor: "ns-resize", style: { left: rect.x + rect.w / 2 - 5, top: rect.y + rect.h - 5 } },
+    { edge: "l", cursor: "ew-resize", style: { left: rect.x - 5, top: rect.y + rect.h / 2 - 5 } },
+    { edge: "r", cursor: "ew-resize", style: { left: rect.x + rect.w - 5, top: rect.y + rect.h / 2 - 5 } },
   ];
 
   return (
