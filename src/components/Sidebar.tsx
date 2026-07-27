@@ -100,21 +100,31 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* Go Premium */}
-      <div style={{ margin: "0 12px 12px", padding: "12px", borderRadius: "12px", backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)" }}>
-        <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
-        <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
-        <button className="bg-purple-500 hover:bg-purple-600" style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "pointer" }}>
-          Upgrade
-        </button>
+      {/* Go Premium — Coming soon */}
+      <div className="group relative" style={{ margin: "0 12px 12px", borderRadius: "12px", overflow: "hidden" }}>
+        <div style={{ padding: "12px", borderRadius: "12px", backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)", opacity: 0.6 }}>
+          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
+          <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
+          <button className="bg-purple-500" style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "not-allowed", opacity: 0.7 }}>
+            Upgrade
+          </button>
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
+          <span className="text-xs font-medium text-white/80">Coming soon</span>
+        </div>
       </div>
 
-      {/* User */}
-      <div style={{ padding: "0 12px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
-        <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0 }}>MR</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Md. Robiul Alam</p>
-          <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
+      {/* User — Coming soon */}
+      <div className="group relative" style={{ padding: "0 12px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", opacity: 0.6 }}>
+          <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0 }}>MR</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Md. Robiul Alam</p>
+            <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
+          </div>
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
+          <span className="text-xs font-medium text-white/80">Coming soon</span>
         </div>
       </div>
     </aside>

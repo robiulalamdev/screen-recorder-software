@@ -15,8 +15,9 @@
       {
         "label": "main",
         "title": "Screen Recorder",
-        "width": 1200,
+        "width": 1100,
         "height": 800,
+        "maxWidth": 1100,
         "minWidth": 510,
         "minHeight": 400,
         "resizable": true,

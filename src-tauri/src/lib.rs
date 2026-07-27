@@ -1113,6 +1113,11 @@ pub fn run() {
                     let _ = window.hide();
                 }
             }
+            if let tauri::WindowEvent::Resized(size) = event {
+                if window.label() == "main" && size.width > 1100 {
+                    let _ = window.set_size(tauri::PhysicalSize::new(1100, size.height));
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

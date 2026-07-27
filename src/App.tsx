@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
+import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import ThemeProvider from "./components/ThemeProvider";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -74,6 +75,10 @@ function MainWindow() {
   useEffect(() => {
     recordingStateRef.current = recordingState;
   }, [recordingState]);
+
+  useEffect(() => {
+    getCurrentWindow().setMaxSize(new PhysicalSize(1100, 99999));
+  }, []);
 
   const handleStopRecording = useCallback(async () => {
     if (isStoppingRef.current) return;
