@@ -57,7 +57,9 @@ export default function OverlayWindow() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [systemAudioEnabled, setSystemAudioEnabled] = useState(true);
   const [resizeEdge, setResizeEdge] = useState<ResizeEdge | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
   const resizeStartRef = useRef({ mx: 0, my: 0, rx: 0, ry: 0, rw: 0, rh: 0 });
+  const moveOffsetRef = useRef({ ox: 0, oy: 0 });
   const dragStartRef = useRef({ x: 0, y: 0 });
 
   const screenW = window.innerWidth;
@@ -103,6 +105,12 @@ export default function OverlayWindow() {
     const target = e.target as HTMLElement;
     if (target.closest("[data-toolbar]") || target.closest("[data-resize-handle]")) return;
     if (sizeMode !== "customize") return;
+    // Don't start new selection when clicking inside existing selection
+    if (hasSelection) {
+      const x = e.clientX;
+      const y = e.clientY;
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return;
+    }
     setIsDragging(true);
     setHasSelection(false);
     const x = e.clientX;
@@ -110,7 +118,7 @@ export default function OverlayWindow() {
     setStart({ x, y });
     setEnd({ x, y });
     dragStartRef.current = { x, y };
-  }, [sizeMode]);
+  }, [sizeMode, hasSelection, rect]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging && sizeMode === "customize") {
@@ -209,6 +217,36 @@ export default function OverlayWindow() {
     };
   }, [resizeEdge, ratio, screenW, screenH]);
 
+  // Move (drag selection area)
+  const handleMoveStart = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsMoving(true);
+    moveOffsetRef.current = { ox: e.clientX - rect.x, oy: e.clientY - rect.y };
+  }, [rect]);
+
+  useEffect(() => {
+    if (!isMoving) return;
+    const handlePointerMove = (e: PointerEvent) => {
+      const { ox, oy } = moveOffsetRef.current;
+      let nx = e.clientX - ox;
+      let ny = e.clientY - oy;
+      nx = Math.min(Math.max(nx, 0), screenW - rect.w);
+      ny = Math.min(Math.max(ny, 0), screenH - rect.h);
+      const nw = rect.w;
+      const nh = rect.h;
+      setStart({ x: nx, y: ny });
+      setEnd({ x: nx + nw, y: ny + nh });
+    };
+    const handlePointerUp = () => setIsMoving(false);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isMoving, screenW, screenH, rect.w, rect.h]);
+
   const handleRecord = useCallback(async () => {
     if (!hasSelection) return;
     try {
@@ -281,10 +319,10 @@ export default function OverlayWindow() {
     { edge: "tr", cursor: "nesw-resize", style: { right: -5, top: -5 } },
     { edge: "bl", cursor: "nesw-resize", style: { left: -5, bottom: -5 } },
     { edge: "br", cursor: "nwse-resize", style: { right: -5, bottom: -5 } },
-    { edge: "t", cursor: "ns-resize", style: { left: "50%", top: -5, transform: "translateX(-50%)", width: 24 } },
-    { edge: "b", cursor: "ns-resize", style: { left: "50%", bottom: -5, transform: "translateX(-50%)", width: 24 } },
-    { edge: "l", cursor: "ew-resize", style: { top: "50%", left: -5, transform: "translateY(-50%)", height: 24 } },
-    { edge: "r", cursor: "ew-resize", style: { top: "50%", right: -5, transform: "translateY(-50%)", height: 24 } },
+    { edge: "t", cursor: "ns-resize", style: { left: "50%", top: -5, transform: "translateX(-50%)" } },
+    { edge: "b", cursor: "ns-resize", style: { left: "50%", bottom: -5, transform: "translateX(-50%)" } },
+    { edge: "l", cursor: "ew-resize", style: { top: "50%", left: -5, transform: "translateY(-50%)" } },
+    { edge: "r", cursor: "ew-resize", style: { top: "50%", right: -5, transform: "translateY(-50%)" } },
   ];
 
   return (
@@ -347,6 +385,7 @@ export default function OverlayWindow() {
           >
             {Math.round(rect.w)} x {Math.round(rect.h)}
           </div>
+          {/* Corner + edge midpoint resize handles */}
           {resizeHandles.map((h) => (
             <div
               key={h.edge}
@@ -359,16 +398,27 @@ export default function OverlayWindow() {
                 border: "2px solid #3b82f6",
                 borderRadius: "50%",
                 cursor: h.cursor,
-                zIndex: 20,
+                zIndex: 22,
                 ...h.style,
               }}
             />
           ))}
-          {/* Edge hit strips for border resize */}
-          <div data-resize-handle="t" onPointerDown={(e) => handleResizeStart("t", e)} style={{ position: "absolute", left: rect.x, top: rect.y - 5, width: rect.w, height: 10, cursor: "ns-resize", zIndex: 19 }} />
-          <div data-resize-handle="b" onPointerDown={(e) => handleResizeStart("b", e)} style={{ position: "absolute", left: rect.x, top: rect.y + rect.h - 5, width: rect.w, height: 10, cursor: "ns-resize", zIndex: 19 }} />
-          <div data-resize-handle="l" onPointerDown={(e) => handleResizeStart("l", e)} style={{ position: "absolute", left: rect.x - 5, top: rect.y, width: 10, height: rect.h, cursor: "ew-resize", zIndex: 19 }} />
-          <div data-resize-handle="r" onPointerDown={(e) => handleResizeStart("r", e)} style={{ position: "absolute", left: rect.x + rect.w - 5, top: rect.y, width: 10, height: rect.h, cursor: "ew-resize", zIndex: 19 }} />
+          {/* Edge hit strips (wider invisible areas for easy grabbing) */}
+          <div data-resize-handle="t" onPointerDown={(e) => handleResizeStart("t", e)} style={{ position: "absolute", left: rect.x, top: rect.y - 5, width: rect.w, height: 10, cursor: "ns-resize", zIndex: 21, opacity: 0 }} />
+          <div data-resize-handle="b" onPointerDown={(e) => handleResizeStart("b", e)} style={{ position: "absolute", left: rect.x, top: rect.y + rect.h - 5, width: rect.w, height: 10, cursor: "ns-resize", zIndex: 21, opacity: 0 }} />
+          <div data-resize-handle="l" onPointerDown={(e) => handleResizeStart("l", e)} style={{ position: "absolute", left: rect.x - 5, top: rect.y, width: 10, height: rect.h, cursor: "ew-resize", zIndex: 21, opacity: 0 }} />
+          <div data-resize-handle="r" onPointerDown={(e) => handleResizeStart("r", e)} style={{ position: "absolute", left: rect.x + rect.w - 5, top: rect.y, width: 10, height: rect.h, cursor: "ew-resize", zIndex: 21, opacity: 0 }} />
+          {/* Move overlay — drag to reposition the selection */}
+          <div
+            onPointerDown={handleMoveStart}
+            style={{
+              position: "absolute",
+              left: rect.x, top: rect.y,
+              width: rect.w, height: rect.h,
+              cursor: "move",
+              zIndex: 18,
+            }}
+          />
         </>
       )}
 
