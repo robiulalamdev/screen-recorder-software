@@ -5,6 +5,8 @@ type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 interface SidebarProps {
   currentPage: Page;
   onNavigate: (page: Page, tab?: string) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
 const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
@@ -41,44 +43,61 @@ const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   )},
 ];
 
-export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, collapsed, onToggle }: SidebarProps) {
   return (
     <aside
-      className="shrink-0 flex flex-col"
+      className="shrink-0 flex flex-col transition-all duration-200"
       style={{
-        width: "200px",
+        width: collapsed ? "60px" : "200px",
         backgroundColor: "var(--bg-secondary)",
         borderRight: "1px solid var(--border-primary)",
         height: "100vh",
         position: "sticky",
         top: 0,
+        overflow: "hidden",
       }}
     >
-      {/* Logo */}
-      <div style={{ padding: "20px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+      {/* Logo + Toggle */}
+      <div style={{ padding: collapsed ? "20px 0" : "20px 16px", display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: collapsed ? 0 : "10px" }}>
         <div
           className="bg-gradient-to-br from-purple-500 to-blue-500"
           style={{ width: "32px", height: "32px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5" /></svg>
         </div>
-        <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>ScreenRecorder</span>
+        {!collapsed && <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", flex: 1 }}>ScreenRecorder</span>}
+        <button
+          onClick={onToggle}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--text-muted)", padding: "4px", display: "flex",
+            alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: collapsed ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 3v18" />
+          </svg>
+        </button>
       </div>
 
-      {/* Navigation — flex-1 pushes bottom items down */}
-      <nav style={{ flex: 1, padding: "0 12px" }}>
+      {/* Navigation */}
+      <nav style={{ flex: 1, padding: collapsed ? "0 8px" : "0 12px" }}>
         {navItems.map((item) => {
           const isActive = currentPage === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
+              title={collapsed ? item.label : undefined}
               style={{
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
-                padding: "10px 12px",
+                justifyContent: collapsed ? "center" : "flex-start",
+                gap: collapsed ? 0 : "12px",
+                padding: collapsed ? "10px 0" : "10px 12px",
                 borderRadius: "8px",
                 fontSize: "14px",
                 fontWeight: 500,
@@ -94,39 +113,49 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
               <span style={{ color: isActive ? "var(--accent-text)" : "var(--text-muted)", flexShrink: 0 }}>
                 {item.icon}
               </span>
-              {item.label}
+              {!collapsed && item.label}
             </button>
           );
         })}
       </nav>
 
-      {/* Go Premium — Coming soon */}
-      <div className="group relative" style={{ margin: "0 12px 12px", borderRadius: "12px", overflow: "hidden" }}>
-        <div style={{ padding: "12px", borderRadius: "12px", backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)", opacity: 0.6 }}>
-          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
-          <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
-          <button className="bg-purple-500" style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "not-allowed", opacity: 0.7 }}>
-            Upgrade
-          </button>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
-          <span className="text-xs font-medium text-white/80">Coming soon</span>
-        </div>
-      </div>
-
-      {/* User — Coming soon */}
-      <div className="group relative" style={{ padding: "0 12px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", opacity: 0.6 }}>
-          <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0 }}>MR</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Md. Robiul Alam</p>
-            <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
+      {!collapsed && (
+        <>
+          {/* Go Premium — Coming soon */}
+          <div className="group relative" style={{ margin: "0 12px 12px", borderRadius: "12px", overflow: "hidden" }}>
+            <div style={{ padding: "12px", borderRadius: "12px", backgroundColor: "var(--accent-bg)", border: "1px solid var(--accent-border)", opacity: 0.6 }}>
+              <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent-text)" }}>Go Premium</p>
+              <p style={{ fontSize: "11px", marginTop: "2px", color: "var(--text-muted)" }}>Unlock powerful features</p>
+              <button className="bg-purple-500" style={{ marginTop: "10px", width: "100%", padding: "6px 0", borderRadius: "8px", fontSize: "12px", fontWeight: 500, color: "white", border: "none", cursor: "not-allowed", opacity: 0.7 }}>
+                Upgrade
+              </button>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
+              <span className="text-xs font-medium text-white/80">Coming soon</span>
+            </div>
           </div>
+
+          {/* User — Coming soon */}
+          <div className="group relative" style={{ padding: "0 12px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", opacity: 0.6 }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", flexShrink: 0 }}>MR</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Md. Robiul Alam</p>
+                <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>Offline Mode</p>
+              </div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
+              <span className="text-xs font-medium text-white/80">Coming soon</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {collapsed && (
+        <div style={{ padding: "0 0 16px", display: "flex", justifyContent: "center" }}>
+          <div title="Coming soon" style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", cursor: "default", opacity: 0.5 }}>MR</div>
         </div>
-        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-default" style={{ backdropFilter: "blur(2px)" }}>
-          <span className="text-xs font-medium text-white/80">Coming soon</span>
-        </div>
-      </div>
+      )}
     </aside>
   );
 }

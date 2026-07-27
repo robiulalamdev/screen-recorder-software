@@ -40,8 +40,11 @@ type ErrorType =
 
 function MainWindow() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
-  const [settingsTab, setSettingsTab] = useState("general");
+  const [settingsTab, setSettingsTab] = useState<string>("general");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar-collapsed") === "true";
+  });
   const [cameraVisible, setCameraVisible] = useState(false);
   const [cameraShape, setCameraShape] = useState<CameraShape>("circle");
   const [error, setError] = useState<{
@@ -317,6 +320,23 @@ function MainWindow() {
     };
   }, [settings.countdownEnabled, handleCountdownComplete]);
 
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setSidebarCollapsed(true);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleDismissSaved = useCallback(() => {
     setRecordingState("idle");
     setSavedRecording(null);
@@ -359,7 +379,7 @@ function MainWindow() {
       }}
     >
       {/* Sidebar — ALWAYS visible */}
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} collapsed={sidebarCollapsed} onToggle={handleToggleSidebar} />
       <main className="flex-1 overflow-y-auto">{renderPage()}</main>
 
       {recordingState === "countdown" && (
