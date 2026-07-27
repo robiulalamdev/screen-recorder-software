@@ -647,7 +647,7 @@ fn get_ffmpeg_path() -> String {
 
     // Check common bundled locations
     let resource_dirs = [
-        "/Applications/Screen Recorder.app/Contents/Resources",
+        "/Applications/Recora.app/Contents/Resources",
         "./resources",
     ];
     for dir in &resource_dirs {
@@ -920,7 +920,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             // Build tray menu
-            let show = MenuItemBuilder::with_id("show", "Open Screen Recorder").build(app)?;
+            let show = MenuItemBuilder::with_id("show", "Open Recora").build(app)?;
             let start = MenuItemBuilder::with_id("start_recording", "Start Recording").build(app)?;
             let stop = MenuItemBuilder::with_id("stop_recording", "Stop Recording").build(app)?;
             let pause = MenuItemBuilder::with_id("pause_recording", "Pause Recording").build(app)?;
@@ -939,7 +939,7 @@ pub fn run() {
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .tooltip("Screen Recorder")
+                .tooltip("Recora")
                 .on_tray_icon_event(|tray_icon, event| {
                     match event {
                         TrayIconEvent::Click {

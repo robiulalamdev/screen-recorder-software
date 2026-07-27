@@ -65,7 +65,7 @@ export default function Sidebar({ currentPage, onNavigate, collapsed, onToggle }
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5" /></svg>
         </div>
-        {!collapsed && <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", flex: 1 }}>ScreenRecorder</span>}
+        {!collapsed && <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", flex: 1 }}>Recora</span>}
         <button
           onClick={onToggle}
           style={{

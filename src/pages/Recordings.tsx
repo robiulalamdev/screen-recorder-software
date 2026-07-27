@@ -27,6 +27,14 @@ export default function Recordings() {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    return (localStorage.getItem("recordings-view") as "grid" | "list") || "list";
+  });
+
+  const handleViewChange = (mode: "grid" | "list") => {
+    setViewMode(mode);
+    localStorage.setItem("recordings-view", mode);
+  };
 
   const filtered = recordings
     .filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
@@ -41,6 +49,20 @@ export default function Recordings() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
         <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>Recordings</h1>
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-1 p-1 rounded-lg border shrink-0" style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}>
+            <button onClick={() => handleViewChange("list")}
+              className="w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer"
+              style={{ backgroundColor: viewMode === "list" ? "var(--accent-bg)" : "transparent", color: viewMode === "list" ? "var(--accent-text)" : "var(--text-muted)" }}
+              title="List view">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            </button>
+            <button onClick={() => handleViewChange("grid")}
+              className="w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer"
+              style={{ backgroundColor: viewMode === "grid" ? "var(--accent-bg)" : "transparent", color: viewMode === "grid" ? "var(--accent-text)" : "var(--text-muted)" }}
+              title="Grid view">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+            </button>
+          </div>
           <div className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 rounded-lg border" style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0" style={{ color: "var(--text-muted)" }}>
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
@@ -55,43 +77,78 @@ export default function Recordings() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-2"}>
         {filtered.map((rec) => (
-          <div key={rec.id}
-            className="flex items-center gap-3 sm:gap-4 p-3 rounded-xl border transition-colors group"
-            style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
-            onContextMenu={(e) => { e.preventDefault(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}>
-            {/* Thumbnail */}
-            <div className="w-24 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
-              style={{ backgroundColor: "var(--bg-elevated)" }}>
-              {rec.type === "screenshot" ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
-                  <path d="M15 3h6v6" />
-                  <path d="M10 14 21 3" />
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          viewMode === "grid" ? (
+            <div key={rec.id}
+              className="flex flex-col rounded-xl border transition-colors group overflow-hidden"
+              style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
+              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}>
+              {/* Thumbnail */}
+              <div className="w-full aspect-video rounded-t-xl overflow-hidden flex items-center justify-center shrink-0"
+                style={{ backgroundColor: "var(--bg-elevated)" }}>
+                {rec.type === "screenshot" ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+                    <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  </svg>
+                ) : (
+                  <VideoThumbnail path={rec.path} />
+                )}
+              </div>
+              <div className="p-3 flex flex-col gap-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium truncate flex-1" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
+                  <button onClick={(e) => { e.stopPropagation(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {rec.type === "screenshot" ? "Screenshot" : `${rec.duration} · ${rec.resolution} · ${rec.fps}${rec.size ? ` · ${rec.size}` : ""}`}
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{rec.date}</p>
+              </div>
+            </div>
+          ) : (
+            <div key={rec.id}
+              className="flex items-center gap-3 sm:gap-4 p-3 rounded-xl border transition-colors group"
+              style={{ backgroundColor: "var(--bg-tertiary)", borderColor: "var(--border-primary)" }}
+              onContextMenu={(e) => { e.preventDefault(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}>
+              {/* Thumbnail */}
+              <div className="w-24 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0"
+                style={{ backgroundColor: "var(--bg-elevated)" }}>
+                {rec.type === "screenshot" ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text-muted)" }}>
+                    <path d="M15 3h6v6" />
+                    <path d="M10 14 21 3" />
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  </svg>
+                ) : (
+                  <VideoThumbnail path={rec.path} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {rec.type === "screenshot" ? "Screenshot" : `${rec.duration} · ${rec.resolution} · ${rec.fps}`}
+                </p>
+              </div>
+              <div className="text-right shrink-0 hidden sm:block">
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rec.size}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{rec.date}</p>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
                 </svg>
-              ) : (
-                <VideoThumbnail path={rec.path} />
-              )}
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{rec.name}</p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {rec.type === "screenshot" ? "Screenshot" : `${rec.duration} &middot; ${rec.resolution} &middot; ${rec.fps}`}
-              </p>
-            </div>
-            <div className="text-right shrink-0 hidden sm:block">
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{rec.size}</p>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{rec.date}</p>
-            </div>
-            <button onClick={(e) => { e.stopPropagation(); setContextMenu({ id: rec.id, x: e.clientX, y: e.clientY }); }}
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
-              </svg>
-            </button>
-          </div>
+          )
         ))}
       </div>
 
