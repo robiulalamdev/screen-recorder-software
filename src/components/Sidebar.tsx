@@ -1,4 +1,5 @@
 import type React from "react";
+import logoUrl from "../assets/logo.png";
 
 type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
 
@@ -59,12 +60,7 @@ export default function Sidebar({ currentPage, onNavigate, collapsed, onToggle }
     >
       {/* Logo + Toggle */}
       <div style={{ padding: collapsed ? "20px 0" : "20px 16px", display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: collapsed ? 0 : "10px" }}>
-        <div
-          className="bg-gradient-to-br from-purple-500 to-blue-500"
-          style={{ width: "32px", height: "32px", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="5" /></svg>
-        </div>
+        <img src={logoUrl} alt="Recora" style={{ width: "32px", height: "32px", borderRadius: "8px", flexShrink: 0 }} />
         {!collapsed && <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", flex: 1 }}>Recora</span>}
         <button
           onClick={onToggle}

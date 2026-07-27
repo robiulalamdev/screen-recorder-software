@@ -1,3 +1,5 @@
+import logoUrl from "../assets/logo.png";
+
 export default function About() {
   return (
     <div className="p-4 sm:p-6 w-full max-w-[500px]">
@@ -8,11 +10,7 @@ export default function About() {
         About
       </h1>
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shrink-0">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-            <circle cx="12" cy="12" r="5" />
-          </svg>
-        </div>
+        <img src={logoUrl} alt="Recora" className="w-16 h-16 rounded-2xl shrink-0" />
         <div>
           <h2
             className="text-lg font-semibold"
