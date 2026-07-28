@@ -37,12 +37,16 @@ struct RecordingState {
     is_recording: bool,
     is_paused: bool,
     pid: Option<u32>,
+    session_mic_enabled: bool,
+    session_audio_enabled: bool,
 }
 
 static RECORDING_STATE: Mutex<RecordingState> = Mutex::new(RecordingState {
     is_recording: false,
     is_paused: false,
     pid: None,
+    session_mic_enabled: true,
+    session_audio_enabled: true,
 });
 
 #[tauri::command]
@@ -101,7 +105,19 @@ fn close_selection_overlay(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_session_audio_state() -> Result<(bool, bool), String> {
+    let state = RECORDING_STATE.lock().map_err(|e| e.to_string())?;
+    Ok((state.session_mic_enabled, state.session_audio_enabled))
+}
+
+#[tauri::command]
 fn start_recording_from_overlay(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64, mic_enabled: Option<bool>, system_audio_enabled: Option<bool>) -> Result<(), String> {
+    // Store session audio state in RECORDING_STATE
+    if let Ok(mut state) = RECORDING_STATE.lock() {
+        state.session_mic_enabled = mic_enabled.unwrap_or(true);
+        state.session_audio_enabled = system_audio_enabled.unwrap_or(true);
+    }
+
     // Determine capture mode based on bounds
     let (mode, _bounds) = if w <= 0.0 && h <= 0.0 {
         ("fullscreen".to_string(), None)
@@ -1186,6 +1202,7 @@ pub fn run() {
             generate_thumbnail,
             get_downloads_dir,
             show_notification,
+            get_session_audio_state,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

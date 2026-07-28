@@ -241,6 +241,8 @@ function MainWindow() {
   const handleCountdownComplete = useCallback(async () => {
     recordingStartTimeRef.current = Date.now();
     setRecordingState("recording");
+    localStorage.setItem("session-mic-enabled", String(sessionMicEnabledRef.current ?? (settings.microphone !== "muted")));
+    localStorage.setItem("session-audio-enabled", String(sessionAudioEnabledRef.current ?? (settings.systemAudio !== "muted")));
 
     try {
       await invoke("create_toolbar_window");
@@ -269,7 +271,10 @@ function MainWindow() {
       setTimeout(finish, 800);
     });
     try {
-      await emit("recording-started");
+      await emit("recording-started", {
+        micEnabled: sessionMicEnabledRef.current ?? (settings.microphone !== "muted"),
+        audioEnabled: sessionAudioEnabledRef.current ?? (settings.systemAudio !== "muted"),
+      });
     } catch {}
 
     try {

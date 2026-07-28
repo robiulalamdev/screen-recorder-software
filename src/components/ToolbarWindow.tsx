@@ -61,17 +61,35 @@ export default function ToolbarWindow() {
   }, [settings.saveLocation]);
 
   useEffect(() => {
-    const unlisten = listen("recording-started", () => {
-      setIsRecordingPhase(true);
-      setElapsed(0);
-    });
-    const unlistenShortcut = listen("shortcut-trigger-screenshot", () => {
-      captureScreenshot();
-    });
-    emit("toolbar-ready");
+    (async () => {
+      try {
+        const [mic, audio] = await invoke<[boolean, boolean]>("get_session_audio_state");
+        setMicEnabled(mic);
+        setAudioEnabled(audio);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    let unlistenRecording: () => void;
+    let unlistenShortcut: () => void;
+
+    (async () => {
+      unlistenRecording = await listen<{ micEnabled?: boolean; audioEnabled?: boolean }>("recording-started", (event) => {
+        setIsRecordingPhase(true);
+        setElapsed(0);
+        if (event.payload.micEnabled != null) setMicEnabled(event.payload.micEnabled);
+        if (event.payload.audioEnabled != null) setAudioEnabled(event.payload.audioEnabled);
+      });
+      unlistenShortcut = await listen("shortcut-trigger-screenshot", () => {
+        captureScreenshot();
+      });
+      emit("toolbar-ready");
+    })();
+
     return () => {
-      unlisten.then((fn) => fn());
-      unlistenShortcut.then((fn) => fn());
+      unlistenRecording?.();
+      unlistenShortcut?.();
     };
   }, [captureScreenshot]);
 
@@ -416,16 +434,18 @@ export default function ToolbarWindow() {
           }}
         >
           <svg
-            width="14"
-            height="14"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
           >
-            <path d="M12 6a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V9a3 3 0 0 0-3-3Z" />
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" x2="12" y1="19" y2="22" />
+            <line x1="12" y1="19" x2="12" y2="23" />
+            <line x1="8" y1="23" x2="16" y2="23" />
+            {!micEnabled && <line x1="3" y1="3" x2="21" y2="21" stroke="#ef4444" />}
           </svg>
         </button>
 
@@ -454,15 +474,16 @@ export default function ToolbarWindow() {
           }}
         >
           <svg
-            width="14"
-            height="14"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
           >
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-            {audioEnabled && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            {!audioEnabled && <line x1="3" y1="3" x2="21" y2="21" stroke="#ef4444" />}
           </svg>
         </button>
 
