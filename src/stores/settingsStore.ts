@@ -44,7 +44,7 @@ const STORAGE_KEY = "screen-recorder-settings";
 
 function getDefaultSettings(): AppSettings {
   return {
-    saveLocation: "~/Downloads/ScreenRecorder",
+    saveLocation: "~/Downloads/Recora",
     autoCreateFolders: true,
     autoOpenFolder: false,
     minimizeToTray: true,
@@ -95,16 +95,18 @@ export function useSettings() {
 
   // On first load, fetch the real downloads dir and update if using default
   useEffect(() => {
-    invoke<string>("get_downloads_dir").then((dir) => {
-      const realDefault = `${dir}/ScreenRecorder`;
-      setSettings((prev) => {
-        // Only update if still using the placeholder default
-        if (prev.saveLocation === "~/Downloads/ScreenRecorder") {
-          return { ...prev, saveLocation: realDefault };
-        }
-        return prev;
-      });
-    }).catch(() => {});
+    invoke<string>("get_downloads_dir")
+      .then((dir) => {
+        const realDefault = `${dir}/Recora`;
+        setSettings((prev) => {
+          // Only update if still using the placeholder default
+          if (prev.saveLocation === "~/Downloads/Recora") {
+            return { ...prev, saveLocation: realDefault };
+          }
+          return prev;
+        });
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,12 +117,15 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  const updateShortcuts = useCallback((partial: Partial<AppSettings["shortcuts"]>) => {
-    setSettings((prev) => ({
-      ...prev,
-      shortcuts: { ...prev.shortcuts, ...partial },
-    }));
-  }, []);
+  const updateShortcuts = useCallback(
+    (partial: Partial<AppSettings["shortcuts"]>) => {
+      setSettings((prev) => ({
+        ...prev,
+        shortcuts: { ...prev.shortcuts, ...partial },
+      }));
+    },
+    [],
+  );
 
   return { settings, updateSettings, updateShortcuts };
 }

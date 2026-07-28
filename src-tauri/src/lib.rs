@@ -14,6 +14,12 @@ use tauri::{
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecordingOptions {
@@ -292,7 +298,7 @@ fn clear_drawing(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn capture_screen() -> Result<String, String> {
-    let path = "/tmp/screenrecorder_selection_bg.png";
+    let path = "/tmp/Recora_selection_bg.png";
     let output = Command::new("screencapture")
         .args(&["-x", "-t", "png", path])
         .output()
@@ -787,33 +793,45 @@ fn check_permissions() -> Result<serde_json::Value, String> {
         "camera": false,
     });
 
-    // Check screen recording permission on macOS
     #[cfg(target_os = "macos")]
     {
-        // Try a small screenshot to test permission
-        let output = Command::new("screencapture")
-            .args(&["-x", "-t", "png", "/tmp/test_permission.png"])
-            .output();
+        permissions["screen"] = serde_json::Value::Bool(unsafe { CGPreflightScreenCaptureAccess() });
+        permissions["microphone"] = serde_json::Value::Bool(true);
+        permissions["camera"] = serde_json::Value::Bool(true);
+    }
 
-        match output {
-            Ok(o) => {
-                permissions["screen"] = serde_json::Value::Bool(o.status.success());
-                // Clean up
-                let _ = fs::remove_file("/tmp/test_permission.png");
-            }
-            Err(_) => {}
-        }
-
-        // Check microphone permission via TCC
-        let _output = Command::new("tccutil")
-            .args(&["reset", "Microphone"])
-            .output();
-        // This doesn't actually check, just resets. We'll rely on runtime detection.
+    #[cfg(not(target_os = "macos"))]
+    {
+        permissions["screen"] = serde_json::Value::Bool(true);
         permissions["microphone"] = serde_json::Value::Bool(true);
         permissions["camera"] = serde_json::Value::Bool(true);
     }
 
     Ok(permissions)
+}
+
+#[tauri::command]
+fn request_screen_recording_permission() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(unsafe { CGRequestScreenCaptureAccess() })
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn open_screen_recording_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(&["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"])
+            .spawn()
+            .map_err(|e| format!("Failed to open settings: {}", e))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -963,7 +981,7 @@ fn get_downloads_dir() -> Result<String, String> {
 
 #[tauri::command]
 fn generate_thumbnail(video_path: String) -> Result<String, String> {
-    let thumb_dir = "/tmp/screenrecorder_thumbs";
+    let thumb_dir = "/tmp/Recora_thumbs";
     fs::create_dir_all(thumb_dir).map_err(|e| e.to_string())?;
 
     // Use video filename hash for unique thumbnail
@@ -1187,6 +1205,8 @@ pub fn run() {
             check_ffmpeg_installed,
             get_available_devices,
             check_permissions,
+            request_screen_recording_permission,
+            open_screen_recording_settings,
             ensure_save_directory,
             get_disk_space,
             delete_file,
