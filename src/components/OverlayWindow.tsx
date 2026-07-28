@@ -54,8 +54,8 @@ export default function OverlayWindow() {
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const [showFpsDropdown, setShowFpsDropdown] = useState(false);
   const [fps, setFps] = useState<number>(settings.frameRate);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [systemAudioEnabled, setSystemAudioEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(settings.microphone !== "muted");
+  const [systemAudioEnabled, setSystemAudioEnabled] = useState(settings.systemAudio !== "muted");
   const [resizeEdge, setResizeEdge] = useState<ResizeEdge | null>(null);
   const [isMoving, setIsMoving] = useState(false);
   const resizeStartRef = useRef({ mx: 0, my: 0, rx: 0, ry: 0, rw: 0, rh: 0 });
@@ -252,13 +252,15 @@ export default function OverlayWindow() {
     try {
       await invoke("start_recording_from_overlay", {
         x: rect.x, y: rect.y, w: rect.w, h: rect.h,
+        mic_enabled: micEnabled,
+        system_audio_enabled: systemAudioEnabled,
       });
       await invoke("close_selection_overlay");
     } catch (err) {
       console.error(err);
       await invoke("close_selection_overlay");
     }
-  }, [hasSelection, rect]);
+  }, [hasSelection, rect, micEnabled, systemAudioEnabled]);
 
   const handleCancel = useCallback(async () => {
     try {
@@ -305,14 +307,12 @@ export default function OverlayWindow() {
   }, [updateSettings]);
 
   const handleMicToggle = useCallback(() => {
-    const next = !micEnabled;
-    setMicEnabled(next);
-  }, [micEnabled]);
+    setMicEnabled((prev) => !prev);
+  }, []);
 
   const handleAudioToggle = useCallback(() => {
-    const next = !systemAudioEnabled;
-    setSystemAudioEnabled(next);
-  }, [systemAudioEnabled]);
+    setSystemAudioEnabled((prev) => !prev);
+  }, []);
 
   const resizeHandles: { edge: ResizeEdge; cursor: string; style: React.CSSProperties }[] = [
     { edge: "tl", cursor: "nwse-resize", style: { left: rect.x - 5, top: rect.y - 5 } },

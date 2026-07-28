@@ -1,7 +1,7 @@
 import type React from "react";
 import logoUrl from "../assets/logo.png";
 
-type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
+type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about" | "docs";
 
 interface SidebarProps {
   currentPage: Page;
@@ -40,6 +40,12 @@ const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: "about", label: "About", icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+    </svg>
+  )},
+  { id: "docs", label: "Docs", icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a2.5 2.5 0 0 1 0-5H20" />
+      <path d="M8 7h8" /><path d="M8 11h8" /><path d="M8 15h4" />
     </svg>
   )},
 ];

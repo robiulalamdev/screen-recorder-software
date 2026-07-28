@@ -101,9 +101,9 @@ fn close_selection_overlay(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn start_recording_from_overlay(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+fn start_recording_from_overlay(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64, mic_enabled: Option<bool>, system_audio_enabled: Option<bool>) -> Result<(), String> {
     // Determine capture mode based on bounds
-    let (mode, bounds) = if w <= 0.0 && h <= 0.0 {
+    let (mode, _bounds) = if w <= 0.0 && h <= 0.0 {
         ("fullscreen".to_string(), None)
     } else {
         ("area".to_string(), Some(serde_json::json!({
@@ -114,7 +114,9 @@ fn start_recording_from_overlay(app: tauri::AppHandle, x: f64, y: f64, w: f64, h
     // Emit event to main window with capture info
     let _ = app.emit("overlay-capture", serde_json::json!({
         "mode": mode,
-        "x": x, "y": y, "w": w, "h": h
+        "x": x, "y": y, "w": w, "h": h,
+        "mic_enabled": mic_enabled.unwrap_or(true),
+        "system_audio_enabled": system_audio_enabled.unwrap_or(true)
     }));
 
     Ok(())
@@ -407,13 +409,20 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
         args.push(":0".into());
     }
 
-    // Add crop filter for area capture
+    // Add crop filter for area capture, always append format=yuv420p for libx264 compatibility
+    let mut video_filter = String::new();
     if options.mode == "area" {
         if let (Some(x), Some(y), Some(w), Some(h)) = (options.x, options.y, options.width, options.height) {
-            // Crop filter: crop=width:height:x:y
-            args.push("-vf".into());
-            args.push(format!("crop={}:{}:{}:{}", w as u32, h as u32, x as u32, y as u32));
+            video_filter = format!("crop={}:{}:{}:{}", w as u32, h as u32, x as u32, y as u32);
         }
+    }
+    if !video_filter.is_empty() {
+        video_filter.push_str(",format=yuv420p");
+        args.push("-vf".into());
+        args.push(video_filter.clone());
+    } else {
+        args.push("-vf".into());
+        args.push("format=yuv420p".into());
     }
 
     // Encoder settings
@@ -453,10 +462,6 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
         }
     }
 
-    // Pixel format
-    args.push("-pix_fmt".into());
-    args.push("yuv420p".into());
-
     // Output
     args.push("-y".into());
     args.push(output_path.clone());
@@ -467,7 +472,7 @@ fn start_recording(options: RecordingOptions) -> Result<String, String> {
         .spawn()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                "FFmpeg is not installed. Please install FFmpeg to record. On macOS: brew install ffmpeg".to_string()
+                "FFmpeg is not installed. The app should include ffmpeg, or install it manually. On macOS: brew install ffmpeg".to_string()
             } else {
                 format!("Failed to start recording: {}", e)
             }
@@ -486,40 +491,29 @@ fn stop_recording(app: tauri::AppHandle) -> Result<(), String> {
     if !state.is_recording {
         return Ok(());
     }
+    state.is_recording = false;
+    state.is_paused = false;
 
-    // Send SIGINT to ffmpeg to gracefully finalize the file
-    if let Some(pid) = state.pid {
+    if let Some(pid) = state.pid.take() {
         let pid_str = pid.to_string();
-
-        // SIGINT first — ffmpeg will finalize the output file
         let _ = Command::new("kill")
             .args(&["-2", &pid_str])
             .output();
 
-        // Wait up to 3 seconds for ffmpeg to exit, then force kill
-        for _ in 0..30 {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            // Check if process is still alive
-            let check = Command::new("kill")
-                .args(&["-0", &pid_str])
-                .output();
-            match check {
-                Ok(o) if !o.status.success() => break, // process exited
-                _ => {}
+        std::thread::spawn(move || {
+            for _ in 0..30 {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let check = Command::new("kill").args(&["-0", &pid_str]).output();
+                if let Ok(o) = check {
+                    if !o.status.success() {
+                        break;
+                    }
+                }
             }
-        }
-
-        // Force kill if still running
-        let _ = Command::new("kill")
-            .args(&["-9", &pid_str])
-            .output();
+            let _ = Command::new("kill").args(&["-9", &pid_str]).output();
+        });
     }
 
-    state.is_recording = false;
-    state.is_paused = false;
-    state.pid = None;
-
-    // Emit event to frontend
     let _ = app.emit("recording-stop", ());
 
     Ok(())
@@ -617,48 +611,136 @@ fn open_folder(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_recording_info(path: String) -> Result<serde_json::Value, String> {
-    let output = Command::new("ffprobe")
-        .args(&[
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format",
-            "-show_streams",
-            &path,
-        ])
+    let output = Command::new(get_ffmpeg_path())
+        .args(&["-i", &path])
         .output()
         .map_err(|e| format!("Failed to get recording info: {}", e))?;
 
-    let info: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("Failed to parse info: {}", e))?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut streams = Vec::new();
+    let mut duration = None;
+    let mut bitrate = None;
 
-    Ok(info)
+    for line in stderr.lines() {
+        if let Some(rest) = line.strip_prefix("  Duration: ") {
+            let parts: Vec<&str> = rest.split(',').collect();
+            if let Some(d) = parts.first() {
+                duration = Some(d.trim().to_string());
+            }
+            for part in &parts {
+                let t = part.trim();
+                if let Some(br) = t.strip_prefix("bitrate: ") {
+                    bitrate = br.trim_end_matches(" kb/s").parse::<f64>().ok();
+                }
+            }
+        }
+        if line.contains("Stream ") && line.contains("Video:") {
+            let mut stream = serde_json::json!({"type": "video"});
+            if let Some(pos) = line.find("Video: ") {
+                let after = &line[pos + 7..];
+                if let Some(codec) = after.split(',').next() {
+                    stream["codec"] = serde_json::json!(codec.trim());
+                }
+            }
+            if let Some((w, h)) = parse_resolution(line) {
+                stream["width"] = serde_json::json!(w);
+                stream["height"] = serde_json::json!(h);
+            }
+            streams.push(stream);
+        }
+        if line.contains("Stream ") && line.contains("Audio:") {
+            let mut stream = serde_json::json!({"type": "audio"});
+            if let Some(pos) = line.find("Audio: ") {
+                let after = &line[pos + 7..];
+                if let Some(codec) = after.split(',').next() {
+                    stream["codec"] = serde_json::json!(codec.trim());
+                }
+            }
+            streams.push(stream);
+        }
+    }
+
+    let mut format = serde_json::json!({});
+    if let Some(d) = duration {
+        format["duration"] = serde_json::json!(d);
+    }
+    if let Some(br) = bitrate {
+        format["bitrate"] = serde_json::json!(br);
+    }
+
+    Ok(serde_json::json!({ "format": format, "streams": streams }))
 }
 
-fn get_ffmpeg_path() -> String {
-    // First check if bundled ffmpeg exists next to the app binary
+fn parse_resolution(s: &str) -> Option<(u32, u32)> {
+    let bytes = s.as_bytes();
+    for i in 1..bytes.len().saturating_sub(3) {
+        if bytes[i] == b'x' && bytes[i - 1].is_ascii_digit() && bytes[i + 1].is_ascii_digit() {
+            let w_start = (0..i).rev().take_while(|j| bytes[*j].is_ascii_digit()).last()?;
+            let w: u32 = std::str::from_utf8(&bytes[w_start..i]).ok()?.parse().ok()?;
+            let h_end = (i + 1..bytes.len()).take_while(|j| bytes[*j].is_ascii_digit()).last()?;
+            let h: u32 = std::str::from_utf8(&bytes[i + 1..=h_end]).ok()?.parse().ok()?;
+            if w > 0 && h > 0 && w < 10000 && h < 10000 {
+                return Some((w, h));
+            }
+        }
+    }
+    None
+}
+
+fn get_binary_path(name: &str) -> String {
     if let Some(exe_path) = std::env::current_exe().ok() {
         if let Some(exe_dir) = exe_path.parent() {
-            let bundled = exe_dir.join("ffmpeg");
+            let bundled = exe_dir.join(name);
             if bundled.exists() {
                 return bundled.to_string_lossy().to_string();
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let bundled_exe = exe_dir.join(format!("{}.exe", name));
+                if bundled_exe.exists() {
+                    return bundled_exe.to_string_lossy().to_string();
+                }
             }
         }
     }
 
-    // Check common bundled locations
-    let resource_dirs = [
-        "/Applications/Recora.app/Contents/Resources",
-        "./resources",
-    ];
-    for dir in &resource_dirs {
-        let ffmpeg_path = format!("{}/ffmpeg", dir);
-        if std::path::Path::new(&ffmpeg_path).exists() {
-            return ffmpeg_path;
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let target = std::env::var("TARGET").unwrap_or_default();
+        let ext = if cfg!(target_os = "windows") { ".exe" } else { "" };
+        let dev_path = std::path::Path::new(&manifest_dir)
+            .join("binaries")
+            .join(format!("{}-{}{}", name, target, ext));
+        if dev_path.exists() {
+            return dev_path.to_string_lossy().to_string();
+        }
+        let dev_path_plain = std::path::Path::new(&manifest_dir)
+            .join("binaries")
+            .join(format!("{}{}", name, ext));
+        if dev_path_plain.exists() {
+            return dev_path_plain.to_string_lossy().to_string();
         }
     }
 
-    // Fall back to system ffmpeg
-    "ffmpeg".to_string()
+    let resource_dirs = [
+        "/Applications/Recora.app/Contents/Resources",
+        "/Applications/Recora.app/Contents/MacOS",
+    ];
+    for dir in &resource_dirs {
+        let path = format!("{}/{}", dir, name);
+        if std::path::Path::new(&path).exists() {
+            return path;
+        }
+    }
+
+    if cfg!(target_os = "windows") {
+        format!("{}.exe", name)
+    } else {
+        name.to_string()
+    }
+}
+
+fn get_ffmpeg_path() -> String {
+    get_binary_path("ffmpeg")
 }
 
 #[tauri::command]

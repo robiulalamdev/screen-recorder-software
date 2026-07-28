@@ -8,8 +8,8 @@ export default function ToolbarWindow() {
   const { settings } = useSettings();
   const [isPaused, setIsPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(settings.microphone !== "muted");
+  const [audioEnabled, setAudioEnabled] = useState(settings.systemAudio !== "muted");
   const [drawingMode, setDrawingMode] = useState(false);
   const [showPenOptions, setShowPenOptions] = useState(false);
   const [penColor, setPenColor] = useState("#ef4444");
@@ -125,6 +125,7 @@ export default function ToolbarWindow() {
   const handleStop = async () => {
     try {
       await emit("tray-stop-recording");
+      invoke("close_toolbar_window");
     } catch (e) {
       console.error(e);
       // Fallback
@@ -399,7 +400,7 @@ export default function ToolbarWindow() {
           onMouseDown={stopToolbarEvents}
           onClick={(e) => {
             stopToolbarEvents(e);
-            setMicEnabled(!micEnabled);
+            setMicEnabled((prev) => !prev);
           }}
           style={{
             width: "32px",
@@ -435,7 +436,7 @@ export default function ToolbarWindow() {
           onMouseDown={stopToolbarEvents}
           onClick={(e) => {
             stopToolbarEvents(e);
-            setAudioEnabled(!audioEnabled);
+            setAudioEnabled((prev) => !prev);
           }}
           style={{
             width: "32px",

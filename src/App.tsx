@@ -9,6 +9,7 @@ import Recordings from "./pages/Recordings";
 import Settings from "./pages/Settings";
 import ShortcutsPage from "./pages/ShortcutsPage";
 import About from "./pages/About";
+import Docs from "./pages/Docs";
 import Countdown from "./components/Countdown";
 import ToolbarWindow from "./components/ToolbarWindow";
 import OverlayWindow from "./components/OverlayWindow";
@@ -19,7 +20,7 @@ import DrawingWindow from "./components/DrawingWindow";
 import { useSettings } from "./stores/settingsStore";
 import { useRecordings } from "./stores/recordingsStore";
 
-type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about";
+type Page = "dashboard" | "recordings" | "settings" | "shortcuts" | "about" | "docs";
 type RecordingState =
   | "idle"
   | "selecting"
@@ -36,7 +37,7 @@ type ErrorType =
   | "recording-failed"
   | "encoder-unavailable"
   | "camera-not-found"
-  | "ffmpeg-not-found";
+  ;
 
 function MainWindow() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
@@ -68,9 +69,12 @@ function MainWindow() {
   >("fullscreen");
 
   const recordingStartTimeRef = useRef<number>(0);
+  const recordingStoppedAtRef = useRef<number>(0);
   const actualFilePathRef = useRef<string | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
   const isStoppingRef = useRef(false);
+  const sessionMicEnabledRef = useRef<boolean | null>(null);
+  const sessionAudioEnabledRef = useRef<boolean | null>(null);
 
   const { settings } = useSettings();
   const { addRecording } = useRecordings();
@@ -86,11 +90,11 @@ function MainWindow() {
   const handleStopRecording = useCallback(async () => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
+    recordingStoppedAtRef.current = Date.now();
 
     try {
       await invoke("stop_recording");
     } catch {}
-    await new Promise((r) => setTimeout(r, 2000));
     try {
       await invoke("close_toolbar_window");
     } catch {}
@@ -98,7 +102,7 @@ function MainWindow() {
       await invoke("close_drawing_window");
     } catch {}
 
-    const duration = Date.now() - recordingStartTimeRef.current;
+    const duration = recordingStoppedAtRef.current - recordingStartTimeRef.current;
     const totalSeconds = Math.floor(duration / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -119,14 +123,21 @@ function MainWindow() {
           : `${(sizeBytes / 1024).toFixed(1)} KB`;
     } catch {}
 
+    let resolution = settings.resolution === "original" ? "" : settings.resolution.toUpperCase();
+    try {
+      const info = await invoke<{ streams: { width?: number; height?: number; type: string }[] }>("get_recording_info", { path: filePath });
+      const videoStream = info.streams.find(s => s.type === "video");
+      if (videoStream?.width && videoStream?.height) {
+        resolution = `${videoStream.width}x${videoStream.height}`;
+      }
+    } catch {}
+    if (!resolution) resolution = "N/A";
+
     addRecording({
       name: fileName,
       type: "video",
       duration: durationStr,
-      resolution:
-        settings.resolution === "original"
-          ? "1920x1080"
-          : settings.resolution.toUpperCase(),
+      resolution,
       fps: `${settings.frameRate} FPS`,
       size: fileSize,
       date: new Date().toLocaleDateString(),
@@ -273,8 +284,8 @@ function MainWindow() {
           quality: settings.videoQuality,
           encoder: settings.encoder,
           outputFormat: settings.outputFormat,
-          microphone: settings.microphone,
-          systemAudio: settings.systemAudio,
+          microphone: sessionMicEnabledRef.current != null ? (sessionMicEnabledRef.current ? "Default" : "Muted") : settings.microphone,
+          systemAudio: sessionAudioEnabledRef.current != null ? (sessionAudioEnabledRef.current ? "Default" : "Muted") : settings.systemAudio,
           micVolume: settings.micVolume,
           systemVolume: settings.systemVolume,
           saveLocation: settings.saveLocation,
@@ -300,6 +311,8 @@ function MainWindow() {
       y?: number;
       w?: number;
       h?: number;
+      mic_enabled?: boolean;
+      system_audio_enabled?: boolean;
     }>("overlay-capture", (event) => {
       const p = event.payload;
       setCaptureMode(p.mode as any);
@@ -308,6 +321,8 @@ function MainWindow() {
       } else {
         setCaptureBounds(null);
       }
+      if (p.mic_enabled != null) sessionMicEnabledRef.current = p.mic_enabled;
+      if (p.system_audio_enabled != null) sessionAudioEnabledRef.current = p.system_audio_enabled;
 
       if (settings.countdownEnabled) {
         setRecordingState("countdown");
@@ -359,7 +374,9 @@ function MainWindow() {
       case "shortcuts":
         return <ShortcutsPage />;
       case "about":
-        return <About />;
+        return <About onNavigate={handleNavigate} />;
+      case "docs":
+        return <Docs />;
       default:
         return (
           <Dashboard
@@ -432,8 +449,7 @@ function MainWindow() {
           type={error.type}
           onDismiss={() => setError(null)}
           onOpenSettings={
-            error.type === "permission-denied" ||
-            error.type === "ffmpeg-not-found"
+            error.type === "permission-denied"
               ? () => {
                   setError(null);
                   handleNavigate("settings", "general");
